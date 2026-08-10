@@ -434,7 +434,7 @@ export function ReaderView({
             {noteMenu && <section ref={noteMenuRef} className={`note-context-menu${popupShaking ? ' shaking' : ''}`} role="dialog" aria-modal={noteMenuDirty || undefined} aria-label={noteMenu.kind === 'selection' ? 'Create note' : 'Edit note'}
                                   onKeyDown={(event) => { if (event.key === 'Escape') requestNoteMenuClose(); }}
                                   style={{left: noteMenu.x, top: noteMenu.y}}>
-                <button className="note-menu-close" onClick={requestNoteMenuClose} aria-label="Close note menu"><X size={15}/></button>
+                <button className="note-menu-close" onClick={closeNoteMenu} aria-label="Discard changes and close note menu"><X size={15}/></button>
                 {noteMenu.kind === 'selection' ? noteMenu.annotate ? <>
                     <div className="note-editor-label"><label htmlFor="new-annotation">Annotation</label>
                         {unsavedWarning && <span>Not saved!</span>}</div>
