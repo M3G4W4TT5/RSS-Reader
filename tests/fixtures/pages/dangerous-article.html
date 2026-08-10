@@ -1,0 +1,10 @@
+<!doctype html>
+<html><head><title>Untrusted article</title><script>globalThis.compromised = true</script></head><body>
+<article onclick="alert('no')">
+  <h1>Untrusted article content</h1>
+  <p>This article contains deliberately unsafe markup alongside enough ordinary prose to pass the readability threshold. The useful text should remain while executable behavior and remote media are removed.</p>
+  <p><a href="https://example.com/safe" onclick="alert('no')">Safe destination</a> and <a href="javascript:alert('no')">unsafe destination</a> demonstrate link handling.</p>
+  <p><img src="https://tracker.example/pixel.gif" onerror="alert('no')">The final paragraph confirms that images cannot trigger network requests inside the isolated renderer.</p>
+  <iframe src="https://tracker.example/frame"></iframe>
+</article>
+</body></html>

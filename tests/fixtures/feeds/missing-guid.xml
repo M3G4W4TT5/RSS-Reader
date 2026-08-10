@@ -1,0 +1,16 @@
+<rss version="2.0">
+  <channel>
+    <title>Missing identifiers</title>
+    <description>Identity fallback fixture</description>
+    <item>
+      <title>URL identity</title>
+      <link>/posts/url-identity#section</link>
+      <pubDate>Wed, 08 Jan 2025 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Hashed identity</title>
+      <description>No GUID and no URL.</description>
+      <pubDate>Wed, 08 Jan 2025 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

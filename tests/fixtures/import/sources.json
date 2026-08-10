@@ -1,0 +1,11 @@
+[
+  {
+    "url": "https://example.com/feed.xml",
+    "name": "Example, Incorporated",
+    "collection": "AI > Research | Daily"
+  },
+  {
+    "url": "https://second.example.com/",
+    "collection": "Daily"
+  }
+]

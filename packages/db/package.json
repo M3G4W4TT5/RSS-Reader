@@ -1,0 +1,16 @@
+{
+  "name": "@rss-reader/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rss-reader/contracts": "workspace:*",
+    "@rss-reader/feeds": "workspace:*",
+    "dotenv": "17.4.2",
+    "kysely": "0.29.4",
+    "pg": "8.22.0"
+  }
+}

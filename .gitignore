@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+.vite/
+out/
+dist/
+coverage/
+
+.env
+.env.local
+.env.*.local
+
+*.log
+pnpm-debug.log*
+
+.idea/

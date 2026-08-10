@@ -1,0 +1,11 @@
+<rss version="2.0">
+  <channel>
+    <title>Summary only</title>
+    <description>Summary fixture</description>
+    <item>
+      <guid>summary-one</guid>
+      <title>Summary article</title>
+      <description>A summary without full content.</description>
+    </item>
+  </channel>
+</rss>

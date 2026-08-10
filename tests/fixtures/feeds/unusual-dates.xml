@@ -1,0 +1,16 @@
+<rss version="2.0">
+  <channel>
+    <title>Date fixture</title>
+    <description>Unusual date forms</description>
+    <item>
+      <guid>dated</guid>
+      <title>Offset date</title>
+      <pubDate>Tue, 07 Jan 2025 14:05:00 +0130</pubDate>
+    </item>
+    <item>
+      <guid>invalid-date</guid>
+      <title>Invalid date</title>
+      <pubDate>eventually</pubDate>
+    </item>
+  </channel>
+</rss>

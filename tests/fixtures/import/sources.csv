@@ -1,0 +1,4 @@
+url,name,collection
+"https://example.com/feed.xml","Example, Incorporated","AI > Research | Daily"
+"https://second.example.com/",,"Daily"
+"https://broken.example.com/","Broken source",

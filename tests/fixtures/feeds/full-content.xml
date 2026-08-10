@@ -1,0 +1,12 @@
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Full content</title>
+    <description>Content fixture</description>
+    <item>
+      <guid>full-one</guid>
+      <title>Full article</title>
+      <description>Short version</description>
+      <content:encoded><![CDATA[<article><p>Complete feed article.</p></article>]]></content:encoded>
+    </item>
+  </channel>
+</rss>

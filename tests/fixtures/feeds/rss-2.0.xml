@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example RSS</title>
+    <link>https://example.com/</link>
+    <description>Fixture RSS feed</description>
+    <item>
+      <guid isPermaLink="false">rss-one</guid>
+      <title>First RSS item</title>
+      <link>https://example.com/posts/one</link>
+      <author>Sam Example</author>
+      <pubDate>Mon, 06 Jan 2025 10:00:00 GMT</pubDate>
+      <description>First summary</description>
+    </item>
+    <item>
+      <guid isPermaLink="false">rss-two</guid>
+      <title>Second RSS item</title>
+      <link>https://example.com/posts/two#fragment</link>
+      <pubDate>Tue, 07 Jan 2025 11:30:00 GMT</pubDate>
+      <description>Second summary</description>
+    </item>
+  </channel>
+</rss>
