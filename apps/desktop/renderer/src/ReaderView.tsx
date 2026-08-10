@@ -218,7 +218,7 @@ export function ReaderView({
             hoverTimer.current = undefined;
             hoverNoteId.current = undefined;
             if (!menuHasUnsavedChanges()) openHighlightMenu(highlight);
-        }, 350);
+        }, 200);
     }
 
     function handleHighlightMouseOut(event: MouseEvent<HTMLDivElement>): void {
