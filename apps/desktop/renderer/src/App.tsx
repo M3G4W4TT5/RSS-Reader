@@ -75,6 +75,11 @@ function sortItemsByDate(items: ItemSummary[]): ItemSummary[] {
     });
 }
 
+function itemSummary(item: ItemDetail): ItemSummary {
+    const {summary: _summary, feedContentHtml: _feedContentHtml, articleContent: _articleContent, ...result} = item;
+    return result;
+}
+
 export function App() {
     const [view, setView] = useState<View>('all');
     const [collectionsExpanded, setCollectionsExpanded] = useState(true);
@@ -113,6 +118,9 @@ export function App() {
     const fetchInFlight = useRef(false);
     const dismissedFetchStartedAt = useRef<string | null | undefined>(undefined);
     const selectedItemId = useRef<string | undefined>(undefined);
+    const retainedUnreadItem = useRef<ItemSummary | undefined>(undefined);
+    const manuallyUnreadItemId = useRef<string | undefined>(undefined);
+    const loadedView = useRef<View | undefined>(undefined);
     const pendingNoteNavigation = useRef<{itemId: string; noteId: string} | undefined>(undefined);
 
     const collectionNames = useMemo(
@@ -144,11 +152,22 @@ export function App() {
         }
     }, []);
 
-    const loadItem = useCallback(async (id: string) => {
-        const [detail, nextNotes] = await Promise.all([
+    const loadItem = useCallback(async (id: string, retainInUnread = false) => {
+        let [detail, nextNotes] = await Promise.all([
             window.readerApi.items.get(id),
             window.readerApi.notes.listForItem(id),
         ]);
+        if (!detail.readAt && manuallyUnreadItemId.current !== id) {
+            try {
+                detail = await window.readerApi.items.setRead(id, true);
+                const opened = itemSummary(detail);
+                setAllItems((current) => current.map((item) => item.id === id ? opened : item));
+                setItems((current) => current.map((item) => item.id === id ? opened : item));
+            } catch (readError) {
+                setError(errorMessage(readError));
+            }
+        }
+        retainedUnreadItem.current = retainInUnread ? itemSummary(detail) : undefined;
         setSelected(detail);
         selectedItemId.current = detail.id;
         setArticleNotes(nextNotes);
@@ -172,19 +191,27 @@ export function App() {
     }, []);
 
     const loadItems = useCallback(async (nextView: View, preferredId?: string) => {
+        if (loadedView.current !== nextView) manuallyUnreadItemId.current = undefined;
+        loadedView.current = nextView;
         if (!isReaderView(nextView)) {
+            retainedUnreadItem.current = undefined;
             setItemsLoading(false);
             return;
         }
         setItemsLoading(true);
         try {
-            const nextItems = sortItemsByDate(await window.readerApi.items.list(itemQuery(nextView)));
+            let nextItems = sortItemsByDate(await window.readerApi.items.list(itemQuery(nextView)));
+            const retained = retainedUnreadItem.current;
+            if (nextView === 'unread' && retained && selectedItemId.current === retained.id
+                && !nextItems.some(({id}) => id === retained.id)) {
+                nextItems = sortItemsByDate([...nextItems, retained]);
+            } else if (nextView !== 'unread') retainedUnreadItem.current = undefined;
             setItems(nextItems);
             const id =
                 preferredId && nextItems.some((item) => item.id === preferredId)
                     ? preferredId
                     : nextItems[0]?.id;
-            if (id) await loadItem(id);
+            if (id) await loadItem(id, nextView === 'unread');
             else {
                 setSelected(undefined);
                 selectedItemId.current = undefined;
@@ -360,16 +387,27 @@ export function App() {
 
     async function selectItem(id: string): Promise<void> {
         try {
-            await loadItem(id);
+            const previousId = selectedItemId.current;
+            if (view === 'unread' && previousId && previousId !== id) {
+                retainedUnreadItem.current = undefined;
+                manuallyUnreadItemId.current = undefined;
+                setItems((current) => current.filter((item) => item.id !== previousId || !item.readAt));
+            }
+            await loadItem(id, view === 'unread');
         } catch (selectionError) {
             setError(errorMessage(selectionError));
         }
     }
 
-    async function setRead(id: string, read: boolean): Promise<void> {
+    async function markUnread(id: string): Promise<void> {
         try {
-            const next = await window.readerApi.items.setRead(id, read);
-            await refreshCurrent(next.id);
+            const next = await window.readerApi.items.setRead(id, false);
+            const summary = itemSummary(next);
+            retainedUnreadItem.current = undefined;
+            manuallyUnreadItemId.current = id;
+            setSelected((current) => current?.id === id ? next : current);
+            setItems((current) => current.map((item) => item.id === id ? summary : item));
+            setAllItems((current) => current.map((item) => item.id === id ? summary : item));
         } catch (readError) {
             setError(errorMessage(readError));
         }
@@ -496,8 +534,8 @@ export function App() {
             return;
         }
         if (!selected) return;
-        if (command === 'toggle-read') {
-            void setRead(selected.id, !selected.readAt);
+        if (command === 'mark-unread') {
+            if (selected.readAt) void markUnread(selected.id);
             return;
         }
         if (command === 'open-original') {
@@ -675,7 +713,7 @@ export function App() {
                     <ReaderView items={items} selected={selected} loading={itemsLoading}
                                 extracting={extractingItemId === selected?.id}
                                 notes={articleNotes} noteBusy={noteBusy} focusNoteId={focusedArticleNoteId}
-                                onSelect={(id) => void selectItem(id)} onSetRead={(id, read) => void setRead(id, read)}
+                                onSelect={(id) => void selectItem(id)} onMarkUnread={(id) => void markUnread(id)}
                                 onRetryExtraction={(id) => selected?.id === id && void extractArticle(selected, true)}
                                 onOpenExternalLink={(itemId, url) => void window.readerApi.items.openExternalLink(itemId, url).catch((openError: unknown) => setError(errorMessage(openError)))}
                                 onOpenOriginal={(id) => void window.readerApi.items.openOriginal(id).catch((openError: unknown) => setError(errorMessage(openError)))}

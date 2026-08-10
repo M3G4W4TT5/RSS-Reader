@@ -248,7 +248,7 @@ The first useful version supports:
    - Open an item inside the application.
    - Initially render content supplied by the feed.
    - Later fetch and cache the linked webpage and extract a clean reader view.
-   - Mark items read/unread.
+   - Mark items read automatically when opened and allow read items to be marked unread.
    - Open the original webpage externally when required.
 
 ### 2.2 Explicitly out of scope initially
@@ -1161,8 +1161,8 @@ Highest-value scenarios:
 2. Add a source.
 3. Fetch it.
 4. See items.
-5. Open an item.
-6. Mark it read.
+5. Open an item and verify that it is marked read automatically.
+6. Optionally mark the open item unread again.
 7. Restart app and retain state.
 
 Do not over-invest in GUI automation early.
@@ -1389,11 +1389,9 @@ See new items and fetch status
   ↓
 Browse the AI collection
   ↓
-Open an item
+Open an item and mark it read automatically
   ↓
 Read feed content or extracted full article
-  ↓
-Mark it read
   ↓
 Restart application
   ↓

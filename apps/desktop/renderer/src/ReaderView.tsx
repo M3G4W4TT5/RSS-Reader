@@ -19,7 +19,7 @@ interface ReaderViewProps {
 
     onSelect(id: string): void;
 
-    onSetRead(id: string, read: boolean): void;
+    onMarkUnread(id: string): void;
 
     onOpenOriginal(id: string): void;
 
@@ -75,7 +75,7 @@ export function ReaderView({
                                noteBusy,
                                focusNoteId,
                                onSelect,
-                               onSetRead,
+                               onMarkUnread,
                                onOpenOriginal,
                                onRetryExtraction,
                            onOpenExternalLink,
@@ -352,10 +352,10 @@ export function ReaderView({
                     <>
                         <header className="article-header">
                             <div className="article-reader-controls" aria-label="Article controls">
-                                <button className="secondary-button article-read-button"
-                                        onClick={() => onSetRead(selected.id, !selected.readAt)}>
-                                    Mark {selected.readAt ? 'unread' : 'read'}
-                                </button>
+                                {selected.readAt && <button className="secondary-button article-read-button"
+                                        onClick={() => onMarkUnread(selected.id)}>
+                                    Mark unread
+                                </button>}
                                 <button className="secondary-button article-navigation-button"
                                         disabled={!previousItem} onClick={() => previousItem && onSelect(previousItem.id)}
                                         aria-label="Previous article" title="Previous article">

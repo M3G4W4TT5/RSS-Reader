@@ -326,7 +326,7 @@ export const appCommandSchema = z.enum([
     'fetch-all',
     'next-item',
     'previous-item',
-    'toggle-read',
+    'mark-unread',
     'open-original',
 ]);
 export type AppCommand = z.infer<typeof appCommandSchema>;

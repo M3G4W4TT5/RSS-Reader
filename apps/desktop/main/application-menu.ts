@@ -22,7 +22,7 @@ export function installApplicationMenu(mainWindow: BrowserWindow): void {
                 {label: 'Previous Item', accelerator: 'CmdOrCtrl+Up', click: () => send('previous-item')},
                 {label: 'Next Item', accelerator: 'CmdOrCtrl+Down', click: () => send('next-item')},
                 {type: 'separator'},
-                {label: 'Mark Read / Unread', accelerator: 'CmdOrCtrl+Shift+U', click: () => send('toggle-read')},
+                {label: 'Mark Unread', accelerator: 'CmdOrCtrl+Shift+U', click: () => send('mark-unread')},
                 {label: 'Open Original', accelerator: 'CmdOrCtrl+O', click: () => send('open-original')},
             ],
         },

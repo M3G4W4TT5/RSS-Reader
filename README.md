@@ -39,7 +39,7 @@ url,name,collection
 
 Later fetches reuse stored ETag and Last-Modified validators. A 304 response is recorded as a successful unchanged run. Items, read state, fetch history, and cached reader content are stored in PostgreSQL. Opening an item lazily fetches its linked page, extracts the main article with Mozilla Readability, sanitizes it, and falls back to feed content if extraction fails. Reopening the item uses the cached result unless Retry is selected.
 
-The article reader places its read/unread and previous/next controls above the source and title. Previous and next follow the current visible list and disable at its boundaries. Click the article title to open the original page in the system browser; its tooltip reads `Open in web`.
+Opening an article marks it read automatically. In the Unread view, the newly opened article remains visible until another article or view is opened, preventing the active reader from disappearing; a read article offers **Mark unread**, while unread articles have no manual Mark read control. Previous and next follow the current visible list and disable at its boundaries. Click the article title to open the original page in the system browser; its tooltip reads `Open in web`.
 
 Select article text to open the Lucide Highlight / Annotate menu. Highlights use the saved-note colour, annotations add an editable plain-text note, and overlapping passages are rejected. Hover over a saved passage for 200 ms, or focus/click it immediately, to view its annotation and edit, delete, or locate it in Notes. Outside clicks close clean pop-ups; unsaved annotation drafts remain open, shake, display `Not saved!`, and lock article selection and application navigation until the draft is saved or explicitly discarded with the popup X (or Cancel for a new annotation). The sidebar Notes entry appears below Sources; its page organises saved passages by collection and article, supports search/filter/sort/edit/delete, and links back to the highlighted passage. Notes survive source deletion using article, source, URL, and collection snapshots.
 
@@ -53,7 +53,7 @@ Useful Windows menu shortcuts:
 - `Ctrl+Shift+I`: import sources from CSV/JSON;
 - `Ctrl+R`: update all enabled sources;
 - `Ctrl+Up` / `Ctrl+Down`: previous / next item;
-- `Ctrl+Shift+U`: mark the selected item read or unread;
+- `Ctrl+Shift+U`: mark the selected read item unread;
 - `Ctrl+O`: open the original page in the default browser.
 
 ## Normal development

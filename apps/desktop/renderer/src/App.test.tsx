@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
-import type {ItemSummary, Note, ReaderApi} from '@rss-reader/contracts';
+import type {ItemQuery, ItemSummary, Note, ReaderApi} from '@rss-reader/contracts';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import {App} from './App';
 
@@ -20,6 +20,7 @@ let fetchAllAction: () => Promise<unknown>;
 let fetchStatusResponse: unknown;
 let itemListResponse: ItemSummary[];
 let notesResponse: Note[];
+let setReadCalls: Array<{id: string; read: boolean}>;
 
 const emptyFetchResult = {startedAt: now, completedAt: now, totalSources: 0, succeeded: 0, unchanged: 0, failed: 0, itemsInserted: 0, itemsUpdated: 0, itemsSkipped: 0, sources: []};
 
@@ -59,6 +60,7 @@ beforeEach(async () => {
     const summary = {id: itemId, sourceId, sourceName: 'Example', canonicalUrl: 'https://example.com/article', title: 'Article title', author: 'Writer', publishedAt: now, firstSeenAt: now, readAt: null};
     itemListResponse = [summary];
     notesResponse = [];
+    setReadCalls = [];
     const api = {
         health: {check: async () => {
             if (healthCheckError) throw healthCheckError;
@@ -79,13 +81,21 @@ beforeEach(async () => {
         collections: {list: async () => [{id: collectionId, name: 'Technology', icon: 'technology', sourceCount: 0, createdAt: now, updatedAt: now}], create: async () => { throw new Error('Not used'); }, update: async () => { throw new Error('Not used'); }, delete: async () => ({success: true}), addSource: async () => ({success: true}), removeSource: async () => ({success: true})},
         fetch: {all: async () => { fetchAllCalls += 1; return fetchAllAction(); }, getStatus: async () => fetchStatusResponse},
         items: {
-            list: async () => itemListResponse,
+            list: async (query: ItemQuery) => itemListResponse.filter((item) =>
+                (!query.unreadOnly || !item.readAt) && (!query.sourceId || item.sourceId === query.sourceId)),
             get: async (id: string) => {
                 const item = itemListResponse.find((candidate) => candidate.id === id);
                 if (!item) throw new Error('Item not found');
                 return {...item, summary: 'Summary', feedContentHtml: `<p>${item.title} body</p>`, articleContent: {status: 'complete', retrievedUrl: item.canonicalUrl, readerHtml: `<p>${item.title} body</p>`, readerText: `${item.title} body`, extractionError: null, fetchedAt: now, updatedAt: now}};
             },
-            setRead: async () => { throw new Error('Not used'); },
+            setRead: async (id: string, read: boolean) => {
+                setReadCalls.push({id, read});
+                const item = itemListResponse.find((candidate) => candidate.id === id);
+                if (!item) throw new Error('Item not found');
+                const updated = {...item, readAt: read ? now : null};
+                itemListResponse = itemListResponse.map((candidate) => candidate.id === id ? updated : candidate);
+                return {...updated, summary: 'Summary', feedContentHtml: `<p>${updated.title} body</p>`, articleContent: {status: 'complete', retrievedUrl: updated.canonicalUrl, readerHtml: `<p>${updated.title} body</p>`, readerText: `${updated.title} body`, extractionError: null, fetchedAt: now, updatedAt: now}};
+            },
             openOriginal: async () => ({opened: true}),
             extractArticle: async (id: string) => {
                 const item = itemListResponse.find((candidate) => candidate.id === id) ?? summary;
@@ -114,6 +124,39 @@ afterEach(async () => {
 });
 
 describe('App renderer interactions', () => {
+    it('marks opened articles read but retains the current one until leaving it in Unread', async () => {
+        const newest = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af20', title: 'Already opened in All',
+            publishedAt: '2026-08-10T12:00:00.000Z', readAt: null};
+        const middle = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af21', title: 'Current unread article',
+            publishedAt: '2026-08-10T11:00:00.000Z', readAt: null};
+        const oldest = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af22', title: 'Next unread article',
+            publishedAt: '2026-08-10T10:00:00.000Z', readAt: null};
+        itemListResponse = [newest, middle, oldest];
+        setReadCalls = [];
+        await act(async () => root.unmount());
+        document.body.innerHTML = '<div id="root"></div>';
+        root = createRoot(document.querySelector('#root')!);
+        await act(async () => root.render(<App/>));
+        await settle();
+
+        expect(setReadCalls).toContainEqual({id: newest.id, read: true});
+        await act(async () => buttonByTitle('Unread').click());
+        await settle();
+        expect(setReadCalls).toContainEqual({id: middle.id, read: true});
+        expect([...document.querySelectorAll('.item-row strong')].map(({textContent}) => textContent))
+            .toEqual(['Current unread article', 'Next unread article']);
+
+        await act(async () => buttonByTitle('Next article').click());
+        await settle();
+        expect([...document.querySelectorAll('.item-row strong')].map(({textContent}) => textContent))
+            .toEqual(['Next unread article']);
+        expect(document.querySelector('.article-read-button')?.textContent).toBe('Mark unread');
+        await act(async () => document.querySelector<HTMLButtonElement>('.article-read-button')!.click());
+        await settle();
+        expect(setReadCalls.at(-1)).toEqual({id: oldest.id, read: false});
+        expect(document.querySelector('.article-read-button')).toBeNull();
+    });
+
     it('orders articles globally by date and time instead of grouping them by source', async () => {
         const older = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af10', title: 'Older from Example',
             publishedAt: '2026-08-10T10:00:00.000Z'};
