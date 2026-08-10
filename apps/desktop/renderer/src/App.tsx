@@ -133,7 +133,6 @@ export function App() {
             window.readerApi.collections.list(),
             window.readerApi.items.list({unreadOnly: false}),
             window.readerApi.settings.get(),
-            window.readerApi.health.check(),
         ]);
         setSources(nextSources);
         setCollections(nextCollections);
@@ -163,6 +162,9 @@ export function App() {
 
     useEffect(() => {
         let active = true;
+        void window.readerApi.health.check().catch((healthError: unknown) => {
+            if (active) setError(errorMessage(healthError));
+        });
         reloadBase()
             .catch((loadError: unknown) => {
                 if (active) setError(errorMessage(loadError));

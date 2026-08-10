@@ -167,6 +167,7 @@ The following later requirements are authoritative where they conflict with earl
 - fullscreen reader mode is an in-app workspace-covering reader box, not Electron window fullscreen. It covers the banner and item list while preserving the sidebar, centers readable content, and uses an icon-only expand/minimize control in the box's top-right corner;
 - Manage Sources actions are ordered Edit, Disable/Enable, Delete;
 - single source and collection deletion use explicit in-app consequence prompts rather than operating-system confirmation dialogs.
+- database health accepts the versioned `stage-N` metadata format instead of hard-coding one migration value, and diagnostic health failures are isolated from base source, collection, item, and settings loading so valid application data remains usable.
 
 The initial Stage 2 implementation saved a source row and then fetched the submitted URL as though it were a direct feed. That behavior was superseded by the amendment below. The current implementation validates and resolves the feed before atomically mutating persistent source state.
 

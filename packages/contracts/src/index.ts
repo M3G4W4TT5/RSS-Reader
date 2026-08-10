@@ -35,7 +35,7 @@ export const healthCheckResponseSchema = z.object({
     database: z.object({
         name: z.string().min(1),
         time: z.iso.datetime(),
-        migration: z.literal('stage-6'),
+        migration: z.string().regex(/^stage-\d+$/),
     }),
 });
 

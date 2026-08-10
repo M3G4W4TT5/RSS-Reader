@@ -15,6 +15,7 @@ let root: Root;
 let deleteManyCalls: string[][];
 let fetchAllCalls: number;
 let deleteSourceCalls: string[];
+let healthCheckError: Error | undefined;
 
 async function settle(): Promise<void> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -41,13 +42,17 @@ beforeEach(async () => {
     deleteManyCalls = [];
     fetchAllCalls = 0;
     deleteSourceCalls = [];
+    healthCheckError = undefined;
     const sources = [
         {id: sourceId, name: 'Example', feedUrl: 'https://example.com/feed.xml', siteUrl: 'https://example.com/', description: null, enabled: true, lastFetchedAt: now, collectionIds: [], createdAt: now, updatedAt: now},
         {id: secondSourceId, name: 'Second', feedUrl: 'https://second.example/feed.xml', siteUrl: null, description: null, enabled: true, lastFetchedAt: null, collectionIds: [], createdAt: now, updatedAt: now},
     ];
     const summary = {id: itemId, sourceId, sourceName: 'Example', canonicalUrl: 'https://example.com/article', title: 'Article title', author: 'Writer', publishedAt: now, firstSeenAt: now, readAt: null};
     const api = {
-        health: {check: async () => ({status: 'ok', database: {name: 'reader', time: now, migration: 'stage-6'}})},
+        health: {check: async () => {
+            if (healthCheckError) throw healthCheckError;
+            return {status: 'ok', database: {name: 'reader', time: now, migration: 'stage-7'}};
+        }},
         settings: {get: async () => ({initialArticleLimit: 25}), update: async (input: unknown) => input},
         sources: {
             list: async () => sources,
@@ -83,6 +88,28 @@ afterEach(async () => {
 });
 
 describe('App renderer interactions', () => {
+    it('loads stage-7 data and opens Settings from the sidebar gear', async () => {
+        expect(document.querySelector('button[title="Example"]')).toBeNull();
+        await act(async () => buttonByTitle('Toggle sources').click());
+        expect(buttonByTitle('Example')).not.toBeNull();
+        expect(buttonByTitle('Technology')).not.toBeNull();
+        await act(async () => buttonByTitle('Settings').click());
+        expect(document.querySelector('.settings-modal h2')?.textContent).toBe('Settings');
+        expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('25');
+    });
+    it('keeps base data and Settings usable when the diagnostic health call fails', async () => {
+        await act(async () => root.unmount());
+        healthCheckError = new Error('Diagnostic health failure');
+        document.body.innerHTML = '<div id="root"></div>';
+        root = createRoot(document.querySelector('#root')!);
+        await act(async () => root.render(<App/>));
+        await settle();
+
+        expect(buttonByTitle('Manage sources').textContent).toContain('2');
+        expect(buttonByTitle('Manage collections').textContent).toContain('1');
+        await act(async () => buttonByTitle('Settings').click());
+        expect(document.querySelector('.settings-modal h2')?.textContent).toBe('Settings');
+    });
     it('updates sources on launch and exposes only the sidebar update control', () => {
         expect(fetchAllCalls).toBe(1);
         expect(buttonByTitle('Update Sources')).not.toBeNull();

@@ -9,7 +9,7 @@ describe('healthCheckResponseSchema', () => {
                 database: {
                     name: 'reader',
                     time: '2026-01-01T00:00:00.000Z',
-                    migration: 'stage-6',
+                    migration: 'stage-7',
                 },
             }),
         ).toEqual({
@@ -17,7 +17,7 @@ describe('healthCheckResponseSchema', () => {
             database: {
                 name: 'reader',
                 time: '2026-01-01T00:00:00.000Z',
-                migration: 'stage-6',
+                migration: 'stage-7',
             },
         });
     });
@@ -26,6 +26,10 @@ describe('healthCheckResponseSchema', () => {
         expect(() =>
             healthCheckResponseSchema.parse({status: 'ok', database: null}),
         ).toThrow();
+        expect(() => healthCheckResponseSchema.parse({
+            status: 'ok',
+            database: {name: 'reader', time: '2026-01-01T00:00:00.000Z', migration: 'latest'},
+        })).toThrow();
     });
 
     it('rejects non-HTTP source URLs', async () => {
