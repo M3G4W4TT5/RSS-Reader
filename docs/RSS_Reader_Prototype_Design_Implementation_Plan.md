@@ -118,6 +118,8 @@ New sources do not import an unlimited exposed feed history. A persisted applica
 
 On a source's first successful fetch, and when an existing source is changed to a different feed URL, the trusted ingestion layer ranks normalized, deduplicated entries by publication date, then source-updated date, then original feed order for undated entries. It imports only the configured number of newest entries. The external identities of older exposed entries are retained as lightweight suppression records so a later refresh does not backfill the intentionally skipped initial history. Already-imported entries can still be updated, and identities first observed after the initial import are inserted normally.
 
+Reader article lists are ordered globally across sources by descending publication date and time, with first-seen time used for undated entries and a stable item-ID tie-breaker. The renderer enforces this invariant for All Items, Unread, collection, and source-scoped lists even if an IPC response arrives in a different order.
+
 The source, selected initial items, suppressed identities, source metadata, and fetch-run counts are persisted atomically. Fetch diagnostics distinguish entries received, inserted, updated, and skipped. Changing the setting is not retroactive: it does not delete existing articles or reconsider an existing source's suppression records.
 
 ### 1.5 Cached article image amendment

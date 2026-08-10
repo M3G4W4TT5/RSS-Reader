@@ -22,7 +22,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The application opens a native Electron window with All Items, Unread, source, and collection views. Sources can be managed and fetched individually or together. Adding either a normal website URL or a direct feed URL first resolves and validates a usable public RSS/Atom feed; only then are the source and its currently exposed entries saved.
+The application opens a native Electron window with All Items, Unread, source, and collection views. Article lists are ordered globally by descending publication date and time across sources; undated entries use their first-seen time. Sources can be managed and fetched individually or together. Adding either a normal website URL or a direct feed URL first resolves and validates a usable public RSS/Atom feed; only then are the source and its currently exposed entries saved.
 
 The Sources screen also supports bulk import from CSV or JSON through **Import CSV / JSON**. Each record must contain `url`; `name` and `collection` are optional. Separate multiple collection names with ` | `. Missing collections are created automatically. Every row still goes through normal website/feed discovery, so unusable URLs are reported as failures while valid rows continue importing.
 

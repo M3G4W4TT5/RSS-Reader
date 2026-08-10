@@ -114,6 +114,24 @@ afterEach(async () => {
 });
 
 describe('App renderer interactions', () => {
+    it('orders articles globally by date and time instead of grouping them by source', async () => {
+        const older = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af10', title: 'Older from Example',
+            publishedAt: '2026-08-10T10:00:00.000Z'};
+        const newest = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af11', title: 'Newest from Example',
+            publishedAt: '2026-08-10T12:00:00.000Z'};
+        const middle = {...itemListResponse[0]!, id: '69325610-446a-4f2d-8ccf-18a5e9e2af13', sourceId: secondSourceId,
+            sourceName: 'Second', title: 'Middle from Second', publishedAt: '2026-08-10T11:00:00.000Z'};
+        itemListResponse = [newest, older, middle];
+        await act(async () => root.unmount());
+        document.body.innerHTML = '<div id="root"></div>';
+        root = createRoot(document.querySelector('#root')!);
+        await act(async () => root.render(<App/>));
+        await settle();
+
+        expect([...document.querySelectorAll('.item-row strong')].map(({textContent}) => textContent))
+            .toEqual(['Newest from Example', 'Middle from Second', 'Older from Example']);
+    });
+
     it('opens the non-disclosure Notes entry below Sources', async () => {
         const notesButton = buttonByTitle('Notes');
         const sourcesHeader = buttonByTitle('Manage sources').closest('.nav-section-header')!;

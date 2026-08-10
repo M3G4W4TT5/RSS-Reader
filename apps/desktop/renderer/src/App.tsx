@@ -67,6 +67,14 @@ function itemQuery(view: View): ItemQuery {
     return {unreadOnly: false};
 }
 
+function sortItemsByDate(items: ItemSummary[]): ItemSummary[] {
+    return [...items].sort((left, right) => {
+        const leftTime = Date.parse(left.publishedAt ?? left.firstSeenAt);
+        const rightTime = Date.parse(right.publishedAt ?? right.firstSeenAt);
+        return rightTime - leftTime || right.id.localeCompare(left.id);
+    });
+}
+
 export function App() {
     const [view, setView] = useState<View>('all');
     const [collectionsExpanded, setCollectionsExpanded] = useState(true);
@@ -157,7 +165,7 @@ export function App() {
         ]);
         setSources(nextSources);
         setCollections(nextCollections);
-        setAllItems(nextItems);
+        setAllItems(sortItemsByDate(nextItems));
         setSettings(nextSettings);
         setAllNotes(nextNotes);
         setNotesLoading(false);
@@ -170,7 +178,7 @@ export function App() {
         }
         setItemsLoading(true);
         try {
-            const nextItems = await window.readerApi.items.list(itemQuery(nextView));
+            const nextItems = sortItemsByDate(await window.readerApi.items.list(itemQuery(nextView)));
             setItems(nextItems);
             const id =
                 preferredId && nextItems.some((item) => item.id === preferredId)
