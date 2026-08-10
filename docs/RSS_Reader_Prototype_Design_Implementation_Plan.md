@@ -150,9 +150,9 @@ Every sidebar destination and section control has a tree-shaken Lucide React ico
 
 The article action bar includes a Lucide expand/minimize control. Fullscreen reader mode hides only the item-list column and lets the reader pane occupy the complete existing reader grid; the application sidebar, workspace header, trusted content handling, and independent reader scrolling remain intact. This is transient renderer state and does not invoke Electron's window-level fullscreen mode.
 
-### 1.11 Approved base colour amendment
+### 1.11 Approved colour amendment
 
-The renderer defines exactly four literal colour tokens: background `#171615`, sidebar and raised surfaces `#1E1D1B`, text and icons `#D6D5D4`, and interactive highlights/notices `#4E99A3`. Borders, muted text, overlays, hover states, and selected surfaces are transparency or CSS colour-mix derivatives of those approved tokens; no additional literal colour is introduced. A focused test enforces this palette constraint.
+The renderer defines exactly five literal colour tokens: background `#171615`, sidebar and raised surfaces `#1E1D1B`, text and icons `#D6D5D4`, interactive highlights/notices `#4E99A3`, and saved text-highlight backgrounds `#9B6C22`. Borders, muted text, overlays, hover states, and selected surfaces are transparency or CSS colour-mix derivatives of those approved tokens; no additional literal colour is introduced. A focused test enforces this palette constraint.
 
 ### 1.12 Navigation, update, collection-icon, favicon, and reader amendment
 
@@ -170,6 +170,19 @@ The following later requirements are authoritative where they conflict with earl
 - Manage Sources actions are ordered Edit, Disable/Enable, Delete;
 - single source and collection deletion use explicit in-app consequence prompts rather than operating-system confirmation dialogs.
 - database health accepts the versioned `stage-N` metadata format instead of hard-coding one migration value, and diagnostic health failures are isolated from base source, collection, item, and settings loading so valid application data remains usable.
+
+### 1.13 Notes, highlights, and annotations amendment
+
+The later approved Notes feature is authoritative for saved passages and article annotation behavior:
+
+- a non-disclosure Lucide Notes entry appears below the complete Sources section in the sidebar and shows the unique saved-note count;
+- selecting article text opens a keyboard-accessible contextual menu with tree-shaken Lucide Highlight and Annotate actions. Highlight saves immediately; Annotate opens a plain-text editor and saves the quotation and annotation atomically;
+- saved quotations are immutable, use the dedicated `#9B6C22` background, cannot overlap, and are reapplied after sanitized content rendering without modifying cached publisher HTML;
+- anchors combine exact quotation, prefix/suffix context, text offsets, and a content hash. Exact positions are verified first, unique context-assisted matches are recovered after content shifts, and ambiguous or missing matches remain safely unresolved rather than marking incorrect text;
+- hovering over a rendered highlight for 350 milliseconds, or immediately focusing/clicking it, shows its annotation when present and permits adding, editing, removing, or deleting the annotation and navigating to Notes. Clean contextual pop-ups close on outside click; a pop-up with a new or changed unsaved annotation remains open, shakes subtly, and shows `Not saved!` beside its Annotation label. Annotated-highlight deletion is confirmed in-app;
+- the Notes page searches, filters, sorts, edits, and deletes notes and groups them by collection then source article. Sources in multiple collections expose the same stored note under each applicable collection, while unique counts do not double-count it; sources without membership use Uncollected;
+- migration `0008_notes` stores quotations, optional annotation text, structured anchors, content hashes, and article/source/URL/collection snapshots. Its nullable item foreign key uses `ON DELETE SET NULL`, preserving user notes after article or source deletion and retaining trusted Open in web access when a snapshot URL exists;
+- opening a live note from the Notes page selects its article, scrolls to the saved passage, and briefly emphasizes it. User-defined groups, overlapping highlights, rich-text annotations, and standalone notes are outside this initial version.
 
 The initial Stage 2 implementation saved a source row and then fetched the submitted URL as though it were a direct feed. That behavior was superseded by the amendment below. The current implementation validates and resolves the feed before atomically mutating persistent source state.
 

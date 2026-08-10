@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
     ChevronDown, ChevronLeft, ChevronRight, CircleDot, Folder,
-    Folders, Inbox, RefreshCw, Rss, Settings,
+    Folders, Inbox, NotebookText, RefreshCw, Rss, Settings,
 } from 'lucide-react';
 import type {
     AppCommand,
@@ -11,6 +11,7 @@ import type {
     ItemDetail,
     ItemQuery,
     ItemSummary,
+    Note,
     Source,
     SourceImportResult,
     SourceImportStatus,
@@ -25,12 +26,14 @@ import {CollectionIconGlyph} from './collection-icons';
 import {SourceIcon} from './SourceIcon';
 import {Modal} from './Modal';
 import {FetchStatusToast} from './FetchStatusToast';
+import {NotesPage} from './NotesPage';
 
 type View =
     | 'all'
     | 'unread'
     | 'manage-sources'
     | 'manage-collections'
+    | 'notes'
     | `source:${string}`
     | `collection:${string}`;
 type SourceDialogState = { mode: 'create' } | { mode: 'edit'; source: Source };
@@ -46,7 +49,7 @@ function errorMessage(error: unknown): string {
 }
 
 function isReaderView(view: View): boolean {
-    return !view.startsWith('manage-');
+    return view === 'all' || view === 'unread' || view.startsWith('source:') || view.startsWith('collection:');
 }
 
 function itemQuery(view: View): ItemQuery {
@@ -72,6 +75,12 @@ export function App() {
     const [allItems, setAllItems] = useState<ItemSummary[]>([]);
     const [items, setItems] = useState<ItemSummary[]>([]);
     const [selected, setSelected] = useState<ItemDetail>();
+    const [allNotes, setAllNotes] = useState<Note[]>([]);
+    const [articleNotes, setArticleNotes] = useState<Note[]>([]);
+    const [notesLoading, setNotesLoading] = useState(true);
+    const [noteBusy, setNoteBusy] = useState(false);
+    const [focusedArticleNoteId, setFocusedArticleNoteId] = useState<string>();
+    const [focusedNotesPageId, setFocusedNotesPageId] = useState<string>();
     const [loading, setLoading] = useState(true);
     const [itemsLoading, setItemsLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -93,6 +102,8 @@ export function App() {
     const [destructiveConfirmation, setDestructiveConfirmation] = useState<DestructiveConfirmation>();
     const initialUpdateStarted = useRef(false);
     const dismissedFetchStartedAt = useRef<string | null | undefined>(undefined);
+    const selectedItemId = useRef<string | undefined>(undefined);
+    const pendingNoteNavigation = useRef<{itemId: string; noteId: string} | undefined>(undefined);
 
     const collectionNames = useMemo(
         () => new Map(collections.map((collection) => [collection.id, collection.name])),
@@ -124,22 +135,30 @@ export function App() {
     }, []);
 
     const loadItem = useCallback(async (id: string) => {
-        const detail = await window.readerApi.items.get(id);
+        const [detail, nextNotes] = await Promise.all([
+            window.readerApi.items.get(id),
+            window.readerApi.notes.listForItem(id),
+        ]);
         setSelected(detail);
+        selectedItemId.current = detail.id;
+        setArticleNotes(nextNotes);
         void extractArticle(detail);
     }, [extractArticle]);
 
     const reloadBase = useCallback(async () => {
-        const [nextSources, nextCollections, nextItems, nextSettings] = await Promise.all([
+        const [nextSources, nextCollections, nextItems, nextSettings, nextNotes] = await Promise.all([
             window.readerApi.sources.list(),
             window.readerApi.collections.list(),
             window.readerApi.items.list({unreadOnly: false}),
             window.readerApi.settings.get(),
+            window.readerApi.notes.list(),
         ]);
         setSources(nextSources);
         setCollections(nextCollections);
         setAllItems(nextItems);
         setSettings(nextSettings);
+        setAllNotes(nextNotes);
+        setNotesLoading(false);
     }, []);
 
     const loadItems = useCallback(async (nextView: View, preferredId?: string) => {
@@ -156,7 +175,11 @@ export function App() {
                     ? preferredId
                     : nextItems[0]?.id;
             if (id) await loadItem(id);
-            else setSelected(undefined);
+            else {
+                setSelected(undefined);
+                selectedItemId.current = undefined;
+                setArticleNotes([]);
+            }
         } finally {
             setItemsLoading(false);
         }
@@ -180,9 +203,15 @@ export function App() {
     }, [reloadBase]);
 
     useEffect(() => {
-        void loadItems(view).catch((loadError: unknown) =>
-            setError(errorMessage(loadError)),
-        );
+        const pending = pendingNoteNavigation.current;
+        void loadItems(view, pending?.itemId)
+            .then(() => {
+                if (pending && pendingNoteNavigation.current === pending) {
+                    pendingNoteNavigation.current = undefined;
+                    setFocusedArticleNoteId(pending.noteId);
+                }
+            })
+            .catch((loadError: unknown) => setError(errorMessage(loadError)));
     }, [loadItems, view]);
 
     async function refreshCurrent(preferredId = selected?.id): Promise<void> {
@@ -337,6 +366,68 @@ export function App() {
         }
     }
 
+    async function createNote(request: Parameters<typeof window.readerApi.notes.create>[0]): Promise<void> {
+        setNoteBusy(true);
+        setError(undefined);
+        try {
+            const created = await window.readerApi.notes.create(request);
+            setAllNotes((current) => [created, ...current.filter(({id}) => id !== created.id)]);
+            if (created.itemId === selectedItemId.current) {
+                setArticleNotes((current) => [...current.filter(({id}) => id !== created.id), created]);
+            }
+        } catch (noteError) {
+            setError(errorMessage(noteError));
+            throw noteError;
+        } finally {
+            setNoteBusy(false);
+        }
+    }
+
+    async function updateNote(id: string, annotationText: string | null): Promise<void> {
+        setNoteBusy(true);
+        setError(undefined);
+        try {
+            const updated = await window.readerApi.notes.update({id, annotationText});
+            setAllNotes((current) => current.map((note) => note.id === id ? updated : note));
+            setArticleNotes((current) => current.map((note) => note.id === id ? updated : note));
+        } catch (noteError) {
+            setError(errorMessage(noteError));
+            throw noteError;
+        } finally {
+            setNoteBusy(false);
+        }
+    }
+
+    async function deleteNote(id: string): Promise<void> {
+        setNoteBusy(true);
+        setError(undefined);
+        try {
+            await window.readerApi.notes.delete(id);
+            setAllNotes((current) => current.filter((note) => note.id !== id));
+            setArticleNotes((current) => current.filter((note) => note.id !== id));
+        } catch (noteError) {
+            setError(errorMessage(noteError));
+            throw noteError;
+        } finally {
+            setNoteBusy(false);
+        }
+    }
+
+    async function openNoteArticle(note: Note): Promise<void> {
+        if (!note.itemId) return;
+        if (view === 'all') {
+            await loadItems('all', note.itemId)
+                .then(() => setFocusedArticleNoteId(note.id))
+                .catch((openError: unknown) => setError(errorMessage(openError)));
+            return;
+        }
+        pendingNoteNavigation.current = {itemId: note.itemId, noteId: note.id};
+        setView('all');
+    }
+
+    const clearFocusedArticleNote = useCallback(() => setFocusedArticleNoteId(undefined), []);
+    const clearFocusedNotesPage = useCallback(() => setFocusedNotesPageId(undefined), []);
+
     async function toggleSource(source: Source): Promise<void> {
         await mutate(() =>
             window.readerApi.sources.update({
@@ -422,6 +513,8 @@ export function App() {
                     ? 'Sources'
                     : view === 'manage-collections'
                         ? 'Collections'
+                        : view === 'notes'
+                            ? 'Notes'
                         : view.startsWith('source:')
                             ? sources.find((source) => source.id === view.slice(7))?.name ?? 'Source'
                             : collections.find((collection) => collection.id === view.slice(11))?.name ??
@@ -489,6 +582,11 @@ export function App() {
                             <span className="nav-entry"><SourceIcon sourceId={source.id} name={source.name}/><span className="nav-text">{source.name}</span></span>
                         </button>
                     ))}
+                    <button className={view === 'notes' ? 'nav-item active section-label' : 'nav-item section-label'}
+                            onClick={() => setView('notes')} title="Notes">
+                        <span className="nav-entry"><NotebookText size={18}/><span className="nav-text">Notes</span></span>
+                        <span className="count">{allNotes.length}</span>
+                    </button>
                 </nav>
                 <div className="sidebar-actions">
                     <button className="sidebar-action-button"
@@ -509,7 +607,7 @@ export function App() {
                     <div>
                         <p className="eyebrow">{isReaderView(view) ? 'Your library' : 'Library setup'}</p>
                         <h1>{title}</h1>
-                        <p>{isReaderView(view) ? 'Read imported feed content and keep track of what you have seen.' : view === 'manage-sources' ? 'Add, organise, and manually refresh website or feed subscriptions.' : 'Group a source into as many collections as you need.'}</p>
+                        <p>{isReaderView(view) ? 'Read imported feed content and keep track of what you have seen.' : view === 'notes' ? 'Review highlights and annotations organised by collection and article.' : view === 'manage-sources' ? 'Add, organise, and manually refresh website or feed subscriptions.' : 'Group a source into as many collections as you need.'}</p>
                     </div>
                     <div className="header-actions">
                         {view === 'manage-sources' && (sourceSelectionMode ? <>
@@ -573,11 +671,20 @@ export function App() {
                 ) : isReaderView(view) ? (
                     <ReaderView items={items} selected={selected} loading={itemsLoading}
                                 extracting={extractingItemId === selected?.id}
+                                notes={articleNotes} noteBusy={noteBusy} focusNoteId={focusedArticleNoteId}
                                 onSelect={(id) => void selectItem(id)} onSetRead={(id, read) => void setRead(id, read)}
                                 onRetryExtraction={(id) => selected?.id === id && void extractArticle(selected, true)}
                                 onOpenExternalLink={(itemId, url) => void window.readerApi.items.openExternalLink(itemId, url).catch((openError: unknown) => setError(errorMessage(openError)))}
-                                onOpenOriginal={(id) => void window.readerApi.items.openOriginal(id).catch((openError: unknown) => setError(errorMessage(openError)))}/>
-                ) : view === 'manage-sources' ? (
+                                onOpenOriginal={(id) => void window.readerApi.items.openOriginal(id).catch((openError: unknown) => setError(errorMessage(openError)))}
+                                onCreateNote={createNote} onUpdateNote={updateNote} onDeleteNote={deleteNote}
+                                onOpenNotes={(noteId) => {setFocusedNotesPageId(noteId); setView('notes');}}
+                                onFocusNoteHandled={clearFocusedArticleNote}/>
+                ) : view === 'notes' ? <NotesPage notes={allNotes} loading={notesLoading} busy={noteBusy}
+                    focusNoteId={focusedNotesPageId} onFocusHandled={clearFocusedNotesPage}
+                    onOpenArticle={(note) => void openNoteArticle(note)}
+                    onOpenOriginal={(note) => void window.readerApi.notes.openOriginal(note.id).catch((openError: unknown) => setError(errorMessage(openError)))}
+                    onUpdate={updateNote} onDelete={deleteNote}/>
+                : view === 'manage-sources' ? (
                     <section className="content-section" aria-label="Sources">
                         {sources.length === 0 ?
                             <div className="empty-state"><span className="empty-icon">⌁</span><h2>No sources yet</h2>
@@ -702,7 +809,7 @@ export function App() {
             {destructiveConfirmation && <Modal
                 title={destructiveConfirmation.kind === 'source' ? 'Delete source?' : 'Delete collection?'}
                 description={destructiveConfirmation.kind === 'source'
-                    ? `“${destructiveConfirmation.source.name}” and all of its items, cached content, images, memberships, and fetch history will be permanently deleted.`
+                    ? `“${destructiveConfirmation.source.name}” and all of its items, cached content, images, memberships, and fetch history will be permanently deleted. Saved notes will be retained with their article and source details.`
                     : `“${destructiveConfirmation.collection.name}” will be permanently deleted. Its sources and items will be kept.`}
                 onCancel={() => setDestructiveConfirmation(undefined)}>
                 <div className="confirmation-prompt" role="alertdialog" aria-label="Confirm deletion">

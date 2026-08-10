@@ -9,6 +9,7 @@ export { assertDevelopmentResetIsSafe, getDatabaseUrl } from './environment';
 export { migrateToLatest, resetDevelopmentDatabase } from './migrations';
 export {SettingsRepository} from './settings-repository';
 export { ItemsRepository } from './items-repository';
+export {NotesRepository} from './notes-repository';
 export {
   ArticleContentRepository,
   type PersistArticleContent,

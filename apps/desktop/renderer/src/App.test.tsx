@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
-import type {ReaderApi} from '@rss-reader/contracts';
+import type {ItemSummary, Note, ReaderApi} from '@rss-reader/contracts';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import {App} from './App';
 
@@ -18,6 +18,8 @@ let deleteSourceCalls: string[];
 let healthCheckError: Error | undefined;
 let fetchAllAction: () => Promise<unknown>;
 let fetchStatusResponse: unknown;
+let itemListResponse: ItemSummary[];
+let notesResponse: Note[];
 
 const emptyFetchResult = {startedAt: now, completedAt: now, totalSources: 0, succeeded: 0, unchanged: 0, failed: 0, itemsInserted: 0, itemsUpdated: 0, itemsSkipped: 0, sources: []};
 
@@ -42,6 +44,7 @@ function buttonByText(text: string): HTMLButtonElement {
 
 beforeEach(async () => {
     (globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
+    HTMLElement.prototype.scrollIntoView = () => undefined;
     document.body.innerHTML = '<div id="root"></div>';
     deleteManyCalls = [];
     fetchAllCalls = 0;
@@ -54,6 +57,8 @@ beforeEach(async () => {
         {id: secondSourceId, name: 'Second', feedUrl: 'https://second.example/feed.xml', siteUrl: null, description: null, enabled: true, lastFetchedAt: null, collectionIds: [], createdAt: now, updatedAt: now},
     ];
     const summary = {id: itemId, sourceId, sourceName: 'Example', canonicalUrl: 'https://example.com/article', title: 'Article title', author: 'Writer', publishedAt: now, firstSeenAt: now, readAt: null};
+    itemListResponse = [summary];
+    notesResponse = [];
     const api = {
         health: {check: async () => {
             if (healthCheckError) throw healthCheckError;
@@ -74,12 +79,27 @@ beforeEach(async () => {
         collections: {list: async () => [{id: collectionId, name: 'Technology', icon: 'technology', sourceCount: 0, createdAt: now, updatedAt: now}], create: async () => { throw new Error('Not used'); }, update: async () => { throw new Error('Not used'); }, delete: async () => ({success: true}), addSource: async () => ({success: true}), removeSource: async () => ({success: true})},
         fetch: {all: async () => { fetchAllCalls += 1; return fetchAllAction(); }, getStatus: async () => fetchStatusResponse},
         items: {
-            list: async () => [summary],
-            get: async () => ({...summary, summary: 'Summary', feedContentHtml: '<p>Feed body</p>', articleContent: {status: 'complete', retrievedUrl: summary.canonicalUrl, readerHtml: '<p>Full article</p>', readerText: 'Full article', extractionError: null, fetchedAt: now, updatedAt: now}}),
+            list: async () => itemListResponse,
+            get: async (id: string) => {
+                const item = itemListResponse.find((candidate) => candidate.id === id);
+                if (!item) throw new Error('Item not found');
+                return {...item, summary: 'Summary', feedContentHtml: `<p>${item.title} body</p>`, articleContent: {status: 'complete', retrievedUrl: item.canonicalUrl, readerHtml: `<p>${item.title} body</p>`, readerText: `${item.title} body`, extractionError: null, fetchedAt: now, updatedAt: now}};
+            },
             setRead: async () => { throw new Error('Not used'); },
             openOriginal: async () => ({opened: true}),
-            extractArticle: async () => ({status: 'complete', retrievedUrl: summary.canonicalUrl, readerHtml: '<p>Full article</p>', readerText: 'Full article', extractionError: null, fetchedAt: now, updatedAt: now, cached: true}),
+            extractArticle: async (id: string) => {
+                const item = itemListResponse.find((candidate) => candidate.id === id) ?? summary;
+                return {status: 'complete', retrievedUrl: item.canonicalUrl, readerHtml: `<p>${item.title} body</p>`, readerText: `${item.title} body`, extractionError: null, fetchedAt: now, updatedAt: now, cached: true};
+            },
             openExternalLink: async () => ({opened: true}),
+        },
+        notes: {
+            list: async () => notesResponse,
+            listForItem: async (id: string) => notesResponse.filter(({itemId: noteItemId}) => noteItemId === id),
+            create: async () => { throw new Error('Not used'); },
+            update: async () => { throw new Error('Not used'); },
+            delete: async () => ({success: true}),
+            openOriginal: async () => ({opened: true}),
         },
         app: {onCommand: () => () => undefined},
     } as unknown as ReaderApi;
@@ -94,6 +114,43 @@ afterEach(async () => {
 });
 
 describe('App renderer interactions', () => {
+    it('opens the non-disclosure Notes entry below Sources', async () => {
+        const notesButton = buttonByTitle('Notes');
+        const sourcesHeader = buttonByTitle('Manage sources').closest('.nav-section-header')!;
+        expect(sourcesHeader.compareDocumentPosition(notesButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(notesButton.getAttribute('aria-expanded')).toBeNull();
+        await act(async () => notesButton.click());
+        await settle();
+        expect(document.querySelector('main h1')?.textContent).toBe('Notes');
+        expect(document.querySelector('.notes-page')?.textContent).toContain('No notes yet');
+    });
+    it('opens the note source article instead of the first All Items article', async () => {
+        const targetItemId = '3b054f2c-67a2-43d7-b9be-30ed3cb6bc45';
+        const top = itemListResponse[0]!;
+        const target: ItemSummary = {...top, id: targetItemId, title: 'Target article',
+            canonicalUrl: 'https://example.com/target', publishedAt: '2026-08-09T12:00:00.000Z'};
+        itemListResponse = [top, target];
+        notesResponse = [{
+            id: 'bb2b1b59-2c71-4099-a571-c3751bb44068', itemId: targetItemId,
+            quoteText: 'Target article', annotationText: 'Open this one',
+            anchor: {exact: 'Target article', prefix: '', suffix: ' body', start: 0, end: 14, contentHash: 'hash'},
+            articleTitle: target.title, sourceName: target.sourceName, canonicalUrl: target.canonicalUrl,
+            collectionNames: [], createdAt: now, updatedAt: now,
+        }];
+        await act(async () => root.unmount());
+        document.body.innerHTML = '<div id="root"></div>';
+        root = createRoot(document.querySelector('#root')!);
+        await act(async () => root.render(<App/>));
+        await settle();
+
+        await act(async () => buttonByTitle('Notes').click());
+        await settle();
+        await act(async () => buttonByText('Open in article').click());
+        await settle();
+
+        expect(document.querySelector('.article-header h2')?.textContent).toBe('Target article');
+        expect(document.querySelector('.item-row.selected strong')?.textContent).toBe('Target article');
+    });
     it('loads stage-7 data and opens Settings from the sidebar gear', async () => {
         expect(document.querySelector('button[title="Example"]')).toBeNull();
         await act(async () => buttonByTitle('Toggle sources').click());

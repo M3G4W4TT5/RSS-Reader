@@ -135,4 +135,19 @@ describe('healthCheckResponseSchema', () => {
         expect(deleteSourcesRequestSchema.parse({ids: [id, id]})).toEqual({ids: [id]});
         expect(() => deleteSourcesRequestSchema.parse({ids: []})).toThrow();
     });
+
+    it('validates immutable highlighted quotations and bounded annotations', async () => {
+        const {createNoteRequestSchema} = await import('./index');
+        const itemId = '2d8430d4-6aa7-4eb8-a4fb-0fcfd20e0783';
+        expect(createNoteRequestSchema.parse({
+            itemId,
+            quoteText: 'selected text',
+            annotationText: 'A note',
+            anchor: {exact: 'selected text', prefix: 'before ', suffix: ' after', start: 7, end: 20, contentHash: 'fnv1a-1234'},
+        })).toMatchObject({itemId, quoteText: 'selected text', annotationText: 'A note'});
+        expect(() => createNoteRequestSchema.parse({
+            itemId, quoteText: '', annotationText: null,
+            anchor: {exact: '', prefix: '', suffix: '', start: 0, end: 0, contentHash: ''},
+        })).toThrow();
+    });
 });

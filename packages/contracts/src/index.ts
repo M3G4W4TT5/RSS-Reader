@@ -25,6 +25,12 @@ export const ipcChannels = {
     itemsOpenOriginal: 'items:open-original',
     itemsExtractArticle: 'items:extract-article',
     itemsOpenExternalLink: 'items:open-external-link',
+    notesList: 'notes:list',
+    notesListForItem: 'notes:list-for-item',
+    notesCreate: 'notes:create',
+    notesUpdate: 'notes:update',
+    notesDelete: 'notes:delete',
+    notesOpenOriginal: 'notes:open-original',
     appCommand: 'app:command',
     settingsGet: 'settings:get',
     settingsUpdate: 'settings:update',
@@ -334,6 +340,46 @@ export type SetItemReadRequest = z.infer<typeof setItemReadRequestSchema>;
 export const openOriginalResultSchema = z.object({opened: z.literal(true)});
 export type OpenOriginalResult = z.infer<typeof openOriginalResultSchema>;
 
+export const textAnchorSchema = z.object({
+    exact: z.string().min(1).max(20_000),
+    prefix: z.string().max(500),
+    suffix: z.string().max(500),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().positive(),
+    contentHash: z.string().min(1).max(100),
+}).refine((anchor) => anchor.end > anchor.start, {
+    message: 'The note selection must contain text.',
+});
+export type TextAnchor = z.infer<typeof textAnchorSchema>;
+
+export const noteSchema = z.object({
+    id: idSchema,
+    itemId: idSchema.nullable(),
+    quoteText: z.string().min(1),
+    annotationText: z.string().nullable(),
+    anchor: textAnchorSchema,
+    articleTitle: z.string().min(1),
+    sourceName: z.string().min(1),
+    canonicalUrl: z.url().nullable(),
+    collectionNames: z.array(z.string().min(1)),
+    createdAt: dateTimeSchema,
+    updatedAt: dateTimeSchema,
+});
+export type Note = z.infer<typeof noteSchema>;
+export const noteListSchema = z.array(noteSchema);
+export const createNoteRequestSchema = z.object({
+    itemId: idSchema,
+    quoteText: z.string().trim().min(1).max(20_000),
+    annotationText: z.string().trim().max(10_000).nullable(),
+    anchor: textAnchorSchema,
+});
+export type CreateNoteRequest = z.infer<typeof createNoteRequestSchema>;
+export const updateNoteRequestSchema = z.object({
+    id: idSchema,
+    annotationText: z.string().trim().max(10_000).nullable(),
+});
+export type UpdateNoteRequest = z.infer<typeof updateNoteRequestSchema>;
+
 export interface ReaderApi {
     health: {
         check(): Promise<HealthCheckResponse>;
@@ -371,6 +417,14 @@ export interface ReaderApi {
         openOriginal(id: string): Promise<OpenOriginalResult>;
         extractArticle(id: string, retry?: boolean): Promise<ArticleExtractionResult>;
         openExternalLink(itemId: string, url: string): Promise<OpenOriginalResult>;
+    };
+    notes: {
+        list(): Promise<Note[]>;
+        listForItem(itemId: string): Promise<Note[]>;
+        create(request: CreateNoteRequest): Promise<Note>;
+        update(request: UpdateNoteRequest): Promise<Note>;
+        delete(id: string): Promise<MutationResult>;
+        openOriginal(id: string): Promise<OpenOriginalResult>;
     };
     app: {
         onCommand(listener: (command: AppCommand) => void): () => void;

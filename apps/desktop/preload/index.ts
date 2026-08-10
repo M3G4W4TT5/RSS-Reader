@@ -23,6 +23,12 @@ import {
     type ItemQuery,
     membershipRequestSchema,
     mutationResultSchema,
+    createNoteRequestSchema,
+    noteListSchema,
+    noteSchema,
+    type CreateNoteRequest,
+    type UpdateNoteRequest,
+    updateNoteRequestSchema,
     openExternalLinkRequestSchema,
     openOriginalResultSchema,
     type ReaderApi,
@@ -188,6 +194,26 @@ const readerApi: ReaderApi = Object.freeze({
                     openExternalLinkRequestSchema.parse({itemId, url}),
                 ),
             ),
+    }),
+    notes: Object.freeze({
+        list: async () => noteListSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesList),
+        ),
+        listForItem: async (itemId: string) => noteListSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesListForItem, sourceIdSchema.parse(itemId)),
+        ),
+        create: async (request: CreateNoteRequest) => noteSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesCreate, createNoteRequestSchema.parse(request)),
+        ),
+        update: async (request: UpdateNoteRequest) => noteSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesUpdate, updateNoteRequestSchema.parse(request)),
+        ),
+        delete: async (id: string) => mutationResultSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesDelete, deleteRequestSchema.parse({id})),
+        ),
+        openOriginal: async (id: string) => openOriginalResultSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.notesOpenOriginal, sourceIdSchema.parse(id)),
+        ),
     }),
     app: Object.freeze({
         onCommand: (listener: (command: AppCommand) => void) => {

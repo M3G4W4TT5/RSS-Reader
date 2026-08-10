@@ -124,6 +124,21 @@ export interface ArticleImagesTable {
   created_at: TimestampColumn;
 }
 
+export interface NotesTable {
+  id: Generated<string>;
+  item_id: string | null;
+  quote_text: string;
+  annotation_text: string | null;
+  anchor: unknown;
+  content_hash: string;
+  article_title_snapshot: string;
+  source_name_snapshot: string;
+  canonical_url_snapshot: string | null;
+  collection_names_snapshot: unknown;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 export interface DatabaseSchema {
   app_metadata: AppMetadataTable;
   sources: SourcesTable;
@@ -135,6 +150,7 @@ export interface DatabaseSchema {
   application_settings: ApplicationSettingsTable;
   initial_item_suppressions: InitialItemSuppressionsTable;
   article_images: ArticleImagesTable;
+  notes: NotesTable;
 }
 
 export type Database = Kysely<DatabaseSchema>;

@@ -41,6 +41,8 @@ Later fetches reuse stored ETag and Last-Modified validators. A 304 response is 
 
 The article reader places its read/unread and previous/next controls above the source and title. Previous and next follow the current visible list and disable at its boundaries. Click the article title to open the original page in the system browser; its tooltip reads `Open in web`.
 
+Select article text to open the Lucide Highlight / Annotate menu. Highlights use the saved-note colour, annotations add an editable plain-text note, and overlapping passages are rejected. Hover over a saved passage for 350 ms, or focus/click it immediately, to view its annotation and edit, delete, or locate it in Notes. Outside clicks close clean pop-ups; unsaved annotation drafts remain open, shake, and display `Not saved!`. The sidebar Notes entry appears below Sources; its page organises saved passages by collection and article, supports search/filter/sort/edit/delete, and links back to the highlighted passage. Notes survive source deletion using article, source, URL, and collection snapshots.
+
 Source updates report progress in a compact bottom-right status pop-up. Expand its disclosure arrow for per-source results, dismiss it at any time, or leave it to fade automatically five seconds after the update completes.
 
 Useful Windows menu shortcuts:
@@ -101,6 +103,6 @@ pnpm dev
 - `apps/desktop/main/favicon-protocol.ts` exposes source favicons through a restricted trusted protocol with RSS-icon fallback in the renderer.
 - `packages/db/src/items-repository.ts` owns item filtering, details, and read state.
 - `packages/db/src/article-content-repository.ts` owns cached full-article content and extraction state.
-- `migrations` contains immutable ordered migrations, including persisted curated collection icons in `0007_collection_icons`.
+- `migrations` contains immutable ordered migrations, including persisted curated collection icons in `0007_collection_icons` and deletion-safe highlights/annotations in `0008_notes`.
 
 There is no local HTTP application server.

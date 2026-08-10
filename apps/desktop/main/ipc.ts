@@ -18,6 +18,10 @@ import {
     itemQuerySchema,
     membershipRequestSchema,
     mutationResultSchema,
+    createNoteRequestSchema,
+    noteListSchema,
+    noteSchema,
+    updateNoteRequestSchema,
     openExternalLinkRequestSchema,
     sourceIdSchema,
     sourceImportResultSchema,
@@ -40,6 +44,7 @@ import {
     ItemsRepository,
     SourcesRepository,
     SettingsRepository,
+    NotesRepository,
     type Database,
 } from '@rss-reader/db';
 import {assertPublicHttpUrl} from '@rss-reader/feeds';
@@ -58,6 +63,7 @@ export function registerIpcHandlers(database: Database): void {
     const items = new ItemsRepository(database);
     const articleService = new ArticleService(new ArticleContentRepository(database));
     const settings = new SettingsRepository(database);
+    const notes = new NotesRepository(database);
 
     ipcMain.handle(ipcChannels.healthCheck, async () => {
         const databaseHealth = await checkDatabase(database);
@@ -209,6 +215,29 @@ export function registerIpcHandlers(database: Database): void {
         await items.get(request.itemId);
         const url = await assertPublicHttpUrl(request.url);
         await shell.openExternal(url);
+        return openOriginalResultSchema.parse({opened: true});
+    });
+    ipcMain.handle(ipcChannels.notesList, async () =>
+        noteListSchema.parse(await notes.list()),
+    );
+    ipcMain.handle(ipcChannels.notesListForItem, async (_event, rawId: unknown) =>
+        noteListSchema.parse(await notes.listForItem(sourceIdSchema.parse(rawId))),
+    );
+    ipcMain.handle(ipcChannels.notesCreate, async (_event, raw: unknown) =>
+        noteSchema.parse(await notes.create(createNoteRequestSchema.parse(raw))),
+    );
+    ipcMain.handle(ipcChannels.notesUpdate, async (_event, raw: unknown) =>
+        noteSchema.parse(await notes.update(updateNoteRequestSchema.parse(raw))),
+    );
+    ipcMain.handle(ipcChannels.notesDelete, async (_event, raw: unknown) => {
+        const {id} = deleteRequestSchema.parse(raw);
+        await notes.delete(id);
+        return mutationResultSchema.parse({success: true});
+    });
+    ipcMain.handle(ipcChannels.notesOpenOriginal, async (_event, rawId: unknown) => {
+        const note = await notes.get(sourceIdSchema.parse(rawId));
+        if (!note.canonicalUrl) throw new Error('This note does not include an original URL.');
+        await shell.openExternal(await assertPublicHttpUrl(note.canonicalUrl));
         return openOriginalResultSchema.parse({opened: true});
     });
 }
