@@ -16,6 +16,10 @@ let deleteManyCalls: string[][];
 let fetchAllCalls: number;
 let deleteSourceCalls: string[];
 let healthCheckError: Error | undefined;
+let fetchAllAction: () => Promise<unknown>;
+let fetchStatusResponse: unknown;
+
+const emptyFetchResult = {startedAt: now, completedAt: now, totalSources: 0, succeeded: 0, unchanged: 0, failed: 0, itemsInserted: 0, itemsUpdated: 0, itemsSkipped: 0, sources: []};
 
 async function settle(): Promise<void> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -43,6 +47,8 @@ beforeEach(async () => {
     fetchAllCalls = 0;
     deleteSourceCalls = [];
     healthCheckError = undefined;
+    fetchAllAction = async () => emptyFetchResult;
+    fetchStatusResponse = {running: false, mode: null, startedAt: null, completedAt: null, totalSources: 0, completedSources: 0, sources: []};
     const sources = [
         {id: sourceId, name: 'Example', feedUrl: 'https://example.com/feed.xml', siteUrl: 'https://example.com/', description: null, enabled: true, lastFetchedAt: now, collectionIds: [], createdAt: now, updatedAt: now},
         {id: secondSourceId, name: 'Second', feedUrl: 'https://second.example/feed.xml', siteUrl: null, description: null, enabled: true, lastFetchedAt: null, collectionIds: [], createdAt: now, updatedAt: now},
@@ -66,7 +72,7 @@ beforeEach(async () => {
             getImportStatus: async () => ({running: false, fileName: null, totalRows: 0, completedRows: 0, imported: 0, updated: 0, failed: 0, collectionsCreated: 0, startedAt: null, completedAt: null}),
         },
         collections: {list: async () => [{id: collectionId, name: 'Technology', icon: 'technology', sourceCount: 0, createdAt: now, updatedAt: now}], create: async () => { throw new Error('Not used'); }, update: async () => { throw new Error('Not used'); }, delete: async () => ({success: true}), addSource: async () => ({success: true}), removeSource: async () => ({success: true})},
-        fetch: {all: async () => { fetchAllCalls += 1; return {startedAt: now, completedAt: now, totalSources: 0, succeeded: 0, unchanged: 0, failed: 0, itemsInserted: 0, itemsUpdated: 0, itemsSkipped: 0, sources: []}; }, getStatus: async () => ({running: false, mode: null, startedAt: null, completedAt: null, totalSources: 0, completedSources: 0, sources: []})},
+        fetch: {all: async () => { fetchAllCalls += 1; return fetchAllAction(); }, getStatus: async () => fetchStatusResponse},
         items: {
             list: async () => [summary],
             get: async () => ({...summary, summary: 'Summary', feedContentHtml: '<p>Feed body</p>', articleContent: {status: 'complete', retrievedUrl: summary.canonicalUrl, readerHtml: '<p>Full article</p>', readerText: 'Full article', extractionError: null, fetchedAt: now, updatedAt: now}}),
@@ -114,6 +120,30 @@ describe('App renderer interactions', () => {
         expect(fetchAllCalls).toBe(1);
         expect(buttonByTitle('Update Sources')).not.toBeNull();
         expect([...document.querySelectorAll('button')].some((button) => /fetch/i.test(button.textContent ?? ''))).toBe(false);
+    });
+
+    it('keeps a dismissed running update hidden while polling continues', async () => {
+        let finishFetch: (() => void) | undefined;
+        fetchStatusResponse = {
+            running: true, mode: 'all', startedAt: '2026-08-10T12:05:00.000Z', completedAt: null,
+            totalSources: 2, completedSources: 1,
+            sources: [{sourceId, sourceName: 'Example', status: 'success', itemsInserted: 1, itemsUpdated: 0, itemsSkipped: 0, errorMessage: null}],
+        };
+        fetchAllAction = () => new Promise((resolve) => {
+            finishFetch = () => resolve(emptyFetchResult);
+        });
+
+        await act(async () => buttonByTitle('Update Sources').click());
+        await settle();
+        expect(document.querySelector('.fetch-toast-copy strong')?.textContent).toBe('Updating 1 of 2 sources');
+        await act(async () => document.querySelector<HTMLButtonElement>('.fetch-toast-dismiss')!.click());
+        await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+        expect(document.querySelector('.fetch-toast')).toBeNull();
+
+        fetchStatusResponse = {...fetchStatusResponse as object, running: false, completedAt: '2026-08-10T12:06:00.000Z', completedSources: 2};
+        finishFetch?.();
+        await settle();
+        expect(document.querySelector('.fetch-toast')).toBeNull();
     });
 
     it('starts with the Sources navigation section collapsed', () => {

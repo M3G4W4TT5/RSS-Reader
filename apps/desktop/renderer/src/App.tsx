@@ -24,6 +24,7 @@ import {sidebarLayoutClassName, sidebarToggleLabel} from './sidebar-state';
 import {CollectionIconGlyph} from './collection-icons';
 import {SourceIcon} from './SourceIcon';
 import {Modal} from './Modal';
+import {FetchStatusToast} from './FetchStatusToast';
 
 type View =
     | 'all'
@@ -91,6 +92,7 @@ export function App() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [destructiveConfirmation, setDestructiveConfirmation] = useState<DestructiveConfirmation>();
     const initialUpdateStarted = useRef(false);
+    const dismissedFetchStartedAt = useRef<string | null | undefined>(undefined);
 
     const collectionNames = useMemo(
         () => new Map(collections.map((collection) => [collection.id, collection.name])),
@@ -204,10 +206,12 @@ export function App() {
     }
 
     async function runFetch(action: () => Promise<unknown>): Promise<void> {
+        dismissedFetchStartedAt.current = undefined;
         setFetching(true);
         setError(undefined);
         const refreshStatus = async (): Promise<void> => {
-            setFetchStatus(await window.readerApi.fetch.getStatus());
+            const nextStatus = await window.readerApi.fetch.getStatus();
+            if (nextStatus.startedAt !== dismissedFetchStartedAt.current) setFetchStatus(nextStatus);
         };
         const timer = window.setInterval(() => {
             void refreshStatus().catch(() => undefined);
@@ -227,6 +231,13 @@ export function App() {
             setFetching(false);
         }
     }
+
+    const dismissFetchStatus = useCallback(() => {
+        setFetchStatus((current) => {
+            dismissedFetchStartedAt.current = current?.startedAt;
+            return undefined;
+        });
+    }, []);
 
     useEffect(() => {
         if (loading || initialUpdateStarted.current) return;
@@ -269,6 +280,7 @@ export function App() {
         setError(undefined);
         try {
             const {fetchResult} = await window.readerApi.sources.create(input);
+            dismissedFetchStartedAt.current = undefined;
             setFetchStatus({
                 running: false,
                 mode: 'single',
@@ -531,25 +543,6 @@ export function App() {
                 {error && <div className="error-banner" role="alert"><span>{error}</span>
                     <button onClick={() => setError(undefined)} aria-label="Dismiss error">×</button>
                 </div>}
-                {fetchStatus?.mode && <section className="fetch-panel" aria-live="polite">
-                    <div className="fetch-summary">
-                        <div>
-                            <strong>{fetchStatus.running ? `Fetching ${fetchStatus.completedSources} of ${fetchStatus.totalSources}` : `Fetch complete · ${fetchStatus.completedSources} sources`}</strong>
-                            <span>{fetchStatus.running ? 'Imported items will appear automatically.' : 'The library is up to date with the results below.'}</span>
-                        </div>
-                        <progress max={Math.max(fetchStatus.totalSources, 1)} value={fetchStatus.completedSources}/>
-                        {!fetchStatus.running &&
-                            <button className="close-button" onClick={() => setFetchStatus(undefined)}
-                                    aria-label="Dismiss fetch status">×</button>}
-                    </div>
-                    {fetchStatus.sources.length > 0 && <div className="fetch-results">
-                        {fetchStatus.sources.map((source) => <div key={source.sourceId}>
-                            <span>{source.sourceName}</span>
-                            <span
-                                className={`fetch-state ${source.status}`}>{source.status === 'failed' ? source.errorMessage : source.status === 'success' ? `${source.itemsInserted} new · ${source.itemsUpdated} updated${source.itemsSkipped > 0 ? ` · ${source.itemsSkipped} older skipped` : ''}` : source.status}</span>
-                        </div>)}
-                    </div>}
-                </section>}
                 {(importStatus?.fileName || importResult) && <section className="import-panel" aria-live="polite">
                     <div className="import-summary">
                         <div>
@@ -683,6 +676,8 @@ export function App() {
                     </section>
                 )}
             </main>
+
+            {fetchStatus?.mode && <FetchStatusToast status={fetchStatus} onDismiss={dismissFetchStatus}/>}
 
             {sourceDialog && <SourceDialog key={sourceDialog.mode === 'edit' ? sourceDialog.source.id : 'new-source'}
                                            source={sourceDialog.mode === 'edit' ? sourceDialog.source : undefined}

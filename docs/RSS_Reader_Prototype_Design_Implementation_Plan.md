@@ -159,6 +159,7 @@ The renderer defines exactly four literal colour tokens: background `#171615`, s
 The following later requirements are authoritative where they conflict with earlier Fetch All, sidebar-management, collection, or fullscreen wording:
 
 - one Lucide Update Sources control beside Settings (or above it in the collapsed icon rail) replaces every renderer fetch button, and all enabled sources update once automatically after application startup;
+- update progress appears as a compact bottom-right pop-up showing completed and total sources. Its disclosure control expands the existing per-source details, manual dismissal remains available throughout the run, and completed status waits five seconds before fading away;
 - Sources starts collapsed; collapsing the sidebar also collapses Sources and Collections and prevents disclosure until the sidebar is expanded;
 - the Sources and Collections section labels navigate to their management views, while only adjacent disclosure controls expand their lists; the duplicate Manage section is removed;
 - migration `0007_collection_icons` adds a persisted curated icon key to collections, defaulting existing collections to `folder`; create and edit flows offer nine relevant tree-shaken Lucide choices;
