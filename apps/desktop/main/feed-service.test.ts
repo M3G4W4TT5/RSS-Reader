@@ -32,8 +32,9 @@ function source(host: string): FetchableSource {
 
 class MemoryRepository implements FeedServiceRepository {
   readonly runs: Array<{ sourceId: string; status: string }> = [];
+  listCalls = 0;
 
-  constructor(private readonly sources: FetchableSource[]) {}
+  constructor(private readonly sources: FetchableSource[], private readonly beforeList?: () => Promise<void>) {}
 
   async getSource(id: string): Promise<FetchableSource> {
     const match = this.sources.find((candidate) => candidate.id === id);
@@ -42,6 +43,8 @@ class MemoryRepository implements FeedServiceRepository {
   }
 
   async listEnabledSources(): Promise<FetchableSource[]> {
+    this.listCalls += 1;
+    await this.beforeList?.();
     return this.sources;
   }
 
@@ -91,6 +94,30 @@ class MemoryRepository implements FeedServiceRepository {
 }
 
 describe('FeedService Fetch All', () => {
+  it('coalesces concurrent Fetch All requests before asynchronous source loading', async () => {
+    const firstSource = source('coalesced.example.com');
+    let releaseList: (() => void) | undefined;
+    const listGate = new Promise<void>((resolve) => { releaseList = resolve; });
+    const repository = new MemoryRepository([firstSource], () => listGate);
+    let fetchCalls = 0;
+    const fetchImplementation: FeedFetchImplementation = async (request) => {
+      fetchCalls += 1;
+      return {status: 'ok', httpStatus: 200, etag: null, lastModified: null,
+        content: rssFixture, finalUrl: request.url, contentType: 'application/rss+xml'};
+    };
+    const service = new FeedService(repository, fetchImplementation);
+    const first = service.fetchAll();
+    const second = service.fetchAll();
+    expect(second).toBe(first);
+    expect(service.getStatus().running).toBe(true);
+    releaseList?.();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(secondResult).toEqual(firstResult);
+    expect(repository.listCalls).toBe(1);
+    expect(fetchCalls).toBe(1);
+    expect(service.getStatus().running).toBe(false);
+  });
+
   it('continues after a broken source and reports a final summary', async () => {
     const successful = source('success.example.com');
     const broken = source('broken.example.com');

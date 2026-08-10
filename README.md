@@ -45,6 +45,8 @@ Select article text to open the Lucide Highlight / Annotate menu. Highlights use
 
 Source updates report progress in a compact bottom-right status pop-up. Expand its disclosure arrow for per-source results, dismiss it at any time, or leave it to fade automatically five seconds after the update completes.
 
+Fetch All requests are coalesced so startup and manual triggers cannot start competing updates. Application errors appear in the same lower-right pop-up area, remain for eight seconds, can be dismissed, and expand to show the complete error message.
+
 Useful Windows menu shortcuts:
 
 - `Ctrl+N`: add source;

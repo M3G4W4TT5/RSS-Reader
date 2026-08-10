@@ -27,6 +27,7 @@ import {SourceIcon} from './SourceIcon';
 import {Modal} from './Modal';
 import {FetchStatusToast} from './FetchStatusToast';
 import {NotesPage} from './NotesPage';
+import {ErrorToast} from './ErrorToast';
 
 type View =
     | 'all'
@@ -101,6 +102,7 @@ export function App() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [destructiveConfirmation, setDestructiveConfirmation] = useState<DestructiveConfirmation>();
     const initialUpdateStarted = useRef(false);
+    const fetchInFlight = useRef(false);
     const dismissedFetchStartedAt = useRef<string | null | undefined>(undefined);
     const selectedItemId = useRef<string | undefined>(undefined);
     const pendingNoteNavigation = useRef<{itemId: string; noteId: string} | undefined>(undefined);
@@ -221,7 +223,6 @@ export function App() {
 
     async function mutate(action: () => Promise<unknown>): Promise<boolean> {
         setSaving(true);
-        setError(undefined);
         try {
             await action();
             await refreshCurrent();
@@ -235,9 +236,10 @@ export function App() {
     }
 
     async function runFetch(action: () => Promise<unknown>): Promise<void> {
+        if (fetchInFlight.current) return;
+        fetchInFlight.current = true;
         dismissedFetchStartedAt.current = undefined;
         setFetching(true);
-        setError(undefined);
         const refreshStatus = async (): Promise<void> => {
             const nextStatus = await window.readerApi.fetch.getStatus();
             if (nextStatus.startedAt !== dismissedFetchStartedAt.current) setFetchStatus(nextStatus);
@@ -258,6 +260,7 @@ export function App() {
                 setError(errorMessage(reloadError)),
             );
             setFetching(false);
+            fetchInFlight.current = false;
         }
     }
 
@@ -267,6 +270,7 @@ export function App() {
             return undefined;
         });
     }, []);
+    const dismissError = useCallback(() => setError(undefined), []);
 
     useEffect(() => {
         if (loading || initialUpdateStarted.current) return;
@@ -280,7 +284,6 @@ export function App() {
         setImporting(true);
         setImportResult(undefined);
         setImportStatus(undefined);
-        setError(undefined);
         const refreshStatus = async (): Promise<void> => {
             setImportStatus(await window.readerApi.sources.getImportStatus());
         };
@@ -306,7 +309,6 @@ export function App() {
         input: Parameters<typeof window.readerApi.sources.create>[0],
     ): Promise<void> {
         setSaving(true);
-        setError(undefined);
         try {
             const {fetchResult} = await window.readerApi.sources.create(input);
             dismissedFetchStartedAt.current = undefined;
@@ -338,7 +340,6 @@ export function App() {
 
     async function saveSettings(input: ApplicationSettings): Promise<void> {
         setSaving(true);
-        setError(undefined);
         try {
             setSettings(await window.readerApi.settings.update(input));
             setSettingsDialogOpen(false);
@@ -368,7 +369,6 @@ export function App() {
 
     async function createNote(request: Parameters<typeof window.readerApi.notes.create>[0]): Promise<void> {
         setNoteBusy(true);
-        setError(undefined);
         try {
             const created = await window.readerApi.notes.create(request);
             setAllNotes((current) => [created, ...current.filter(({id}) => id !== created.id)]);
@@ -385,7 +385,6 @@ export function App() {
 
     async function updateNote(id: string, annotationText: string | null): Promise<void> {
         setNoteBusy(true);
-        setError(undefined);
         try {
             const updated = await window.readerApi.notes.update({id, annotationText});
             setAllNotes((current) => current.map((note) => note.id === id ? updated : note));
@@ -400,7 +399,6 @@ export function App() {
 
     async function deleteNote(id: string): Promise<void> {
         setNoteBusy(true);
-        setError(undefined);
         try {
             await window.readerApi.notes.delete(id);
             setAllNotes((current) => current.filter((note) => note.id !== id));
@@ -638,9 +636,6 @@ export function App() {
                     </div>
                 </header>
 
-                {error && <div className="error-banner" role="alert"><span>{error}</span>
-                    <button onClick={() => setError(undefined)} aria-label="Dismiss error">×</button>
-                </div>}
                 {(importStatus?.fileName || importResult) && <section className="import-panel" aria-live="polite">
                     <div className="import-summary">
                         <div>
@@ -784,7 +779,10 @@ export function App() {
                 )}
             </main>
 
-            {fetchStatus?.mode && <FetchStatusToast status={fetchStatus} onDismiss={dismissFetchStatus}/>}
+            {(fetchStatus?.mode || error) && <div className="toast-stack">
+                {fetchStatus?.mode && <FetchStatusToast status={fetchStatus} onDismiss={dismissFetchStatus}/>}
+                {error && <ErrorToast message={error} onDismiss={dismissError}/>}
+            </div>}
 
             {sourceDialog && <SourceDialog key={sourceDialog.mode === 'edit' ? sourceDialog.source.id : 'new-source'}
                                            source={sourceDialog.mode === 'edit' ? sourceDialog.source : undefined}

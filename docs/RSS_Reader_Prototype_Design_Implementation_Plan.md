@@ -159,7 +159,9 @@ The renderer defines exactly five literal colour tokens: background `#171615`, s
 The following later requirements are authoritative where they conflict with earlier Fetch All, sidebar-management, collection, or fullscreen wording:
 
 - one Lucide Update Sources control beside Settings (or above it in the collapsed icon rail) replaces every renderer fetch button, and all enabled sources update once automatically after application startup;
+- Fetch All synchronously claims one main-process operation before any asynchronous source loading and coalesces concurrent Fetch All requests onto that shared result. The renderer also uses a synchronous in-flight guard so startup, menu, and button triggers cannot dispatch duplicate IPC operations before React updates;
 - update progress appears as a compact bottom-right pop-up showing completed and total sources. Its disclosure control expands the existing per-source details, manual dismissal remains available throughout the run, and completed status waits five seconds before fading away;
+- application errors use a matching lower-right Lucide pop-up rather than an in-workspace banner. It remains for eight seconds, can be dismissed, expands via an arrow to show the complete error message, and stacks with update status without overlap;
 - Sources starts collapsed; collapsing the sidebar also collapses Sources and Collections and prevents disclosure until the sidebar is expanded;
 - the Sources and Collections section labels navigate to their management views, while only adjacent disclosure controls expand their lists; the duplicate Manage section is removed;
 - migration `0007_collection_icons` adds a persisted curated icon key to collections, defaulting existing collections to `folder`; create and edit flows offer nine relevant tree-shaken Lucide choices;

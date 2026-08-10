@@ -69,6 +69,7 @@ function errorDetails(error: unknown): {
 
 export class FeedService {
   private status = emptyStatus();
+  private activeFetchAll: Promise<FetchAllResult> | undefined;
 
   constructor(
     private readonly repository: FeedServiceRepository,
@@ -87,17 +88,31 @@ export class FeedService {
 
   async fetchSource(sourceId: string): Promise<FetchSourceResult> {
     this.assertIdle();
-    const source = await this.repository.getSource(sourceId);
-    this.begin('single', [source]);
-    const result = await this.fetchOne(source);
-    this.finish();
-    return result;
+    this.begin('single', []);
+    try {
+      const source = await this.repository.getSource(sourceId);
+      this.setSources([source]);
+      return await this.fetchOne(source);
+    } finally {
+      this.finish();
+    }
   }
 
-  async fetchAll(): Promise<FetchAllResult> {
+  fetchAll(): Promise<FetchAllResult> {
+    if (this.activeFetchAll) return this.activeFetchAll;
     this.assertIdle();
+    this.begin('all', []);
+    const operation = this.performFetchAll().finally(() => {
+      this.finish();
+      this.activeFetchAll = undefined;
+    });
+    this.activeFetchAll = operation;
+    return operation;
+  }
+
+  private async performFetchAll(): Promise<FetchAllResult> {
     const sources = await this.repository.listEnabledSources();
-    this.begin('all', sources);
+    this.setSources(sources);
     const results = new Array<FetchSourceResult>(sources.length);
     let nextIndex = 0;
 
@@ -115,8 +130,6 @@ export class FeedService {
     await Promise.all(
       Array.from({ length: workerCount }, async () => worker()),
     );
-    this.finish();
-
     return {
       totalSources: results.length,
       succeeded: results.filter((result) => result.status === 'success').length,
@@ -135,6 +148,22 @@ export class FeedService {
         0,
       ),
       results,
+    };
+  }
+
+  private setSources(sources: FetchableSource[]): void {
+    this.status = {
+      ...this.status,
+      totalSources: sources.length,
+      sources: sources.map((source) => ({
+        sourceId: source.id,
+        sourceName: source.name,
+        status: 'pending',
+        itemsInserted: 0,
+        itemsUpdated: 0,
+        itemsSkipped: 0,
+        errorMessage: null,
+      })),
     };
   }
 

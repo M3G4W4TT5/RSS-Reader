@@ -170,6 +170,11 @@ describe('App renderer interactions', () => {
 
         expect(buttonByTitle('Manage sources').textContent).toContain('2');
         expect(buttonByTitle('Manage collections').textContent).toContain('1');
+        expect(document.querySelector('.error-banner')).toBeNull();
+        expect(document.querySelector('.error-toast')).not.toBeNull();
+        expect(document.body.textContent).not.toContain('Diagnostic health failure');
+        await act(async () => document.querySelector<HTMLButtonElement>('.error-toast-disclosure')!.click());
+        expect(document.body.textContent).toContain('Diagnostic health failure');
         await act(async () => buttonByTitle('Settings').click());
         expect(document.querySelector('.settings-modal h2')?.textContent).toBe('Settings');
     });
@@ -177,6 +182,21 @@ describe('App renderer interactions', () => {
         expect(fetchAllCalls).toBe(1);
         expect(buttonByTitle('Update Sources')).not.toBeNull();
         expect([...document.querySelectorAll('button')].some((button) => /fetch/i.test(button.textContent ?? ''))).toBe(false);
+    });
+
+    it('dispatches only one manual update when update triggers occur in the same render', async () => {
+        let finishFetch: (() => void) | undefined;
+        fetchAllAction = () => new Promise((resolve) => {
+            finishFetch = () => resolve(emptyFetchResult);
+        });
+        await act(async () => {
+            const update = buttonByTitle('Update Sources');
+            update.click();
+            update.click();
+        });
+        expect(fetchAllCalls).toBe(2);
+        finishFetch?.();
+        await settle();
     });
 
     it('keeps a dismissed running update hidden while polling continues', async () => {
