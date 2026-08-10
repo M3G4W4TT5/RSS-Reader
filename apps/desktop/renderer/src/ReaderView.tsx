@@ -134,6 +134,11 @@ export function ReaderView({
         else closeNoteMenu();
     }
 
+    function runUnlessUnsaved(action: () => void): void {
+        if (menuHasUnsavedChanges()) warnUnsaved();
+        else action();
+    }
+
     function cancelHighlightHover(): void {
         if (hoverTimer.current !== undefined) {
             window.clearTimeout(hoverTimer.current);
@@ -146,10 +151,42 @@ export function ReaderView({
         function handleOutsideMouseDown(event: globalThis.MouseEvent): void {
             const target = event.target;
             if (!currentNoteMenu.current || !(target instanceof Node) || noteMenuRef.current?.contains(target)) return;
-            requestNoteMenuClose();
+            if (menuHasUnsavedChanges()) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                warnUnsaved();
+            } else closeNoteMenu();
+        }
+        function handleOutsideClick(event: globalThis.MouseEvent): void {
+            const target = event.target;
+            if (!menuHasUnsavedChanges() || !(target instanceof Node) || noteMenuRef.current?.contains(target)) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            warnUnsaved();
+        }
+        function handleOutsideFocus(event: FocusEvent): void {
+            const target = event.target;
+            if (!menuHasUnsavedChanges() || !(target instanceof Node) || noteMenuRef.current?.contains(target)) return;
+            warnUnsaved();
+            noteMenuRef.current?.querySelector<HTMLElement>('textarea, button')?.focus();
+        }
+        function handleOutsideKeyDown(event: globalThis.KeyboardEvent): void {
+            const target = event.target;
+            if (!menuHasUnsavedChanges() || !(target instanceof Node) || noteMenuRef.current?.contains(target)) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            warnUnsaved();
         }
         document.addEventListener('mousedown', handleOutsideMouseDown, true);
-        return () => document.removeEventListener('mousedown', handleOutsideMouseDown, true);
+        document.addEventListener('click', handleOutsideClick, true);
+        document.addEventListener('focusin', handleOutsideFocus, true);
+        document.addEventListener('keydown', handleOutsideKeyDown, true);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideMouseDown, true);
+            document.removeEventListener('click', handleOutsideClick, true);
+            document.removeEventListener('focusin', handleOutsideFocus, true);
+            document.removeEventListener('keydown', handleOutsideKeyDown, true);
+        };
     }, [notes]);
 
     useEffect(() => () => {
@@ -273,6 +310,7 @@ export function ReaderView({
 
     const existingNote = noteMenu?.kind === 'existing'
         ? notes.find(({id}) => id === noteMenu.noteId) : undefined;
+    const noteMenuDirty = menuHasUnsavedChanges(noteMenu);
 
     if (loading) {
         return <div className="empty-state reader-loading">Loading items…</div>;
@@ -392,7 +430,8 @@ export function ReaderView({
                     <div className="article-empty">Select an item to read it.</div>
                 )}
             </article>
-            {noteMenu && <section ref={noteMenuRef} className={`note-context-menu${popupShaking ? ' shaking' : ''}`} role="dialog" aria-label={noteMenu.kind === 'selection' ? 'Create note' : 'Edit note'}
+            {noteMenuDirty && <div className="note-interaction-lock" aria-hidden="true"/>}
+            {noteMenu && <section ref={noteMenuRef} className={`note-context-menu${popupShaking ? ' shaking' : ''}`} role="dialog" aria-modal={noteMenuDirty || undefined} aria-label={noteMenu.kind === 'selection' ? 'Create note' : 'Edit note'}
                                   onKeyDown={(event) => { if (event.key === 'Escape') requestNoteMenuClose(); }}
                                   style={{left: noteMenu.x, top: noteMenu.y}}>
                 <button className="note-menu-close" onClick={requestNoteMenuClose} aria-label="Close note menu"><X size={15}/></button>
@@ -426,21 +465,21 @@ export function ReaderView({
                               placeholder="Add a note…"/>
                     <div className="note-menu-actions wrap">
                         <button className="secondary-button" disabled={noteBusy}
-                                onClick={() => onOpenNotes(existingNote.id)}><NotebookText size={15}/>Notes</button>
+                                onClick={() => runUnlessUnsaved(() => onOpenNotes(existingNote.id))}><NotebookText size={15}/>Notes</button>
                         <button className="secondary-button" disabled={noteBusy}
                                 onClick={() => void onUpdateNote(existingNote.id, noteMenu.draft.trim() || null).then(closeNoteMenu).catch(() => undefined)}>
                             <Save size={15}/>Save
                         </button>
                         {existingNote.annotationText && <button className="secondary-button" disabled={noteBusy}
-                                onClick={() => void onUpdateNote(existingNote.id, null).then(closeNoteMenu).catch(() => undefined)}>
+                                onClick={() => runUnlessUnsaved(() => void onUpdateNote(existingNote.id, null).then(closeNoteMenu).catch(() => undefined))}>
                             <MessageSquareOff size={15}/>Remove note
                         </button>}
                         {noteMenu.confirmingDelete ? <button className="primary-button" disabled={noteBusy}
                                 onClick={() => void onDeleteNote(existingNote.id).then(closeNoteMenu).catch(() => undefined)}>Confirm delete</button>
                             : <button className="text-button danger" disabled={noteBusy}
-                                      onClick={() => existingNote.annotationText
+                                      onClick={() => runUnlessUnsaved(() => existingNote.annotationText
                                           ? setNoteMenu({...noteMenu, confirmingDelete: true})
-                                          : void onDeleteNote(existingNote.id).then(closeNoteMenu).catch(() => undefined)}>
+                                          : void onDeleteNote(existingNote.id).then(closeNoteMenu).catch(() => undefined))}>
                                 <Trash2 size={15}/>Delete
                             </button>}
                     </div>

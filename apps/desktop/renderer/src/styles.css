@@ -137,6 +137,7 @@ button:disabled { cursor: wait; opacity: .6; }
 .article-content mark[data-note-id]:hover, .article-content mark[data-note-id]:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 .note-focus-pulse { animation: note-focus 1.6s ease; }
 @keyframes note-focus { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 35% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--highlight) 50%, transparent); } }
+.note-interaction-lock { position: fixed; z-index: 19; inset: 0; cursor: not-allowed; }
 .note-context-menu { position: fixed; z-index: 20; display: grid; width: min(360px, calc(100vw - 32px)); max-height: min(460px, calc(100vh - 32px)); gap: 9px; padding: 15px; overflow-y: auto; border: 1px solid var(--border); border-radius: 11px; color: var(--text); background: var(--sidebar); box-shadow: 0 16px 40px var(--overlay); transform: translateY(0); }
 .note-context-menu.shaking { animation: note-popup-shake 280ms ease; }
 @keyframes note-popup-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 55% { transform: translateX(3px); } 80% { transform: translateX(-2px); } }
