@@ -35,6 +35,15 @@ import {
     updateSourceRequestSchema,
     applicationSettingsSchema,
     updateApplicationSettingsSchema,
+    savedArticleStateSchema,
+    savedArticleListSchema,
+    archivedSavedArticleQuerySchema,
+    setSavedFlagRequestSchema,
+    setArticleTagsRequestSchema,
+    articleTagSchema,
+    articleTagListSchema,
+    createTagRequestSchema,
+    updateTagRequestSchema,
 } from '@rss-reader/contracts';
 import {
     ArticleContentRepository,
@@ -46,6 +55,7 @@ import {
     SettingsRepository,
     NotesRepository,
     type Database,
+    SavedArticlesRepository,
 } from '@rss-reader/db';
 import {assertPublicHttpUrl} from '@rss-reader/feeds';
 import {FeedService} from './feed-service';
@@ -64,6 +74,7 @@ export function registerIpcHandlers(database: Database): void {
     const articleService = new ArticleService(new ArticleContentRepository(database));
     const settings = new SettingsRepository(database);
     const notes = new NotesRepository(database);
+    const saved = new SavedArticlesRepository(database);
 
     ipcMain.handle(ipcChannels.healthCheck, async () => {
         const databaseHealth = await checkDatabase(database);
@@ -216,6 +227,42 @@ export function registerIpcHandlers(database: Database): void {
         const url = await assertPublicHttpUrl(request.url);
         await shell.openExternal(url);
         return openOriginalResultSchema.parse({opened: true});
+    });
+    ipcMain.handle(ipcChannels.savedSetStarred, async (_event, raw: unknown) => {
+        const request = setSavedFlagRequestSchema.parse(raw);
+        return savedArticleStateSchema.parse(await saved.setStarred(request.id, request.enabled));
+    });
+    ipcMain.handle(ipcChannels.savedSetReadLater, async (_event, raw: unknown) => {
+        const request = setSavedFlagRequestSchema.parse(raw);
+        return savedArticleStateSchema.parse(await saved.setReadLater(request.id, request.enabled));
+    });
+    ipcMain.handle(ipcChannels.savedSetTags, async (_event, raw: unknown) => {
+        const request = setArticleTagsRequestSchema.parse(raw);
+        return savedArticleStateSchema.parse(await saved.setTags(request.itemId, request.tagIds));
+    });
+    ipcMain.handle(ipcChannels.savedListArchived, async (_event, raw: unknown) => {
+        const request = archivedSavedArticleQuerySchema.parse(raw);
+        return savedArticleListSchema.parse(await saved.listArchived(request.kind, request.kind === 'tag' ? request.tagId : undefined));
+    });
+    ipcMain.handle(ipcChannels.savedOpenOriginal, async (_event, rawId: unknown) => {
+        const article = await saved.get(sourceIdSchema.parse(rawId));
+        if (!article.canonicalUrl) throw new Error('This saved article does not include an original URL.');
+        await shell.openExternal(await assertPublicHttpUrl(article.canonicalUrl));
+        return openOriginalResultSchema.parse({opened: true});
+    });
+    ipcMain.handle(ipcChannels.tagsList, async () => articleTagListSchema.parse(await saved.listTags()));
+    ipcMain.handle(ipcChannels.tagsCreate, async (_event, raw: unknown) => {
+        const request = createTagRequestSchema.parse(raw);
+        return articleTagSchema.parse(await saved.createTag(request.name));
+    });
+    ipcMain.handle(ipcChannels.tagsUpdate, async (_event, raw: unknown) => {
+        const request = updateTagRequestSchema.parse(raw);
+        return articleTagSchema.parse(await saved.updateTag(request.id, request.name));
+    });
+    ipcMain.handle(ipcChannels.tagsDelete, async (_event, raw: unknown) => {
+        const {id} = deleteRequestSchema.parse(raw);
+        await saved.deleteTag(id);
+        return mutationResultSchema.parse({success: true});
     });
     ipcMain.handle(ipcChannels.notesList, async () =>
         noteListSchema.parse(await notes.list()),

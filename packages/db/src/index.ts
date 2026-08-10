@@ -10,6 +10,7 @@ export { migrateToLatest, resetDevelopmentDatabase } from './migrations';
 export {SettingsRepository} from './settings-repository';
 export { ItemsRepository } from './items-repository';
 export {NotesRepository} from './notes-repository';
+export {SavedArticlesRepository, normalizeTagName} from './saved-articles-repository';
 export {
   ArticleContentRepository,
   type PersistArticleContent,

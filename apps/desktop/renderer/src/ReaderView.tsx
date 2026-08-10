@@ -1,9 +1,9 @@
 import {useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent} from 'react';
 import {
     ChevronLeft, ChevronRight, Highlighter, Maximize2, MessageSquareOff, MessageSquareText,
-    Minimize2, NotebookText, Save, Trash2, X,
+    Minimize2, NotebookText, Save, Trash2, X, Star, Clock3, Tags, CheckCircle2, ExternalLink,
 } from 'lucide-react';
-import type {CreateNoteRequest, ItemDetail, ItemSummary, Note} from '@rss-reader/contracts';
+import type {CreateNoteRequest, ItemDetail, ItemSummary, Note, SavedArticle} from '@rss-reader/contracts';
 import {sanitizeFeedContent} from './sanitize-feed-content';
 import {readerGridClassName, readerModeLabel} from './reader-mode';
 import {applyNoteHighlights, captureTextAnchor, noteOverlaps} from './article-notes';
@@ -16,6 +16,8 @@ interface ReaderViewProps {
     notes: Note[];
     noteBusy: boolean;
     focusNoteId?: string;
+    archivedItems?: SavedArticle[];
+    readLaterView?: boolean;
 
     onSelect(id: string): void;
 
@@ -36,6 +38,11 @@ interface ReaderViewProps {
     onOpenNotes(noteId: string): void;
 
     onFocusNoteHandled(): void;
+    onSetStarred?(id: string, enabled: boolean): Promise<void>;
+    onSetReadLater?(id: string, enabled: boolean): Promise<void>;
+    onDoneReadLater?(id: string): Promise<void>;
+    onEditTags?(id: string): void;
+    onOpenArchived?(article: SavedArticle): void;
 }
 
 type NoteMenu = {
@@ -74,10 +81,17 @@ export function ReaderView({
                                notes,
                                noteBusy,
                                focusNoteId,
+                               archivedItems = [],
+                               readLaterView = false,
                                onSelect,
                                onMarkUnread,
                                onOpenOriginal,
                                onRetryExtraction,
+                           onSetStarred = async () => undefined,
+                           onSetReadLater = async () => undefined,
+                           onDoneReadLater = async () => undefined,
+                           onEditTags = () => undefined,
+                           onOpenArchived = () => undefined,
                            onOpenExternalLink,
                            onCreateNote,
                            onUpdateNote,
@@ -315,7 +329,7 @@ export function ReaderView({
     if (loading) {
         return <div className="empty-state reader-loading">Loading items…</div>;
     }
-    if (items.length === 0) {
+    if (items.length === 0 && archivedItems.length === 0) {
         return (
             <div className="empty-state reader-loading">
                 <span className="empty-icon" aria-hidden="true">⌁</span>
@@ -329,19 +343,24 @@ export function ReaderView({
         <section className={readerGridClassName(expanded)} aria-label="Feed reader">
             <div className="item-list" aria-label="Items">
                 {items.map((item) => (
-                    <button
-                        key={item.id}
-                        className={selected?.id === item.id ? 'item-row selected' : 'item-row'}
-                        onClick={() => onSelect(item.id)}
-                    >
-                        <span className={item.readAt ? 'unread-dot read' : 'unread-dot'}/>
-                        <span className="item-row-copy">
-              <strong>{item.title}</strong>
-              <span>{item.sourceName}</span>
-              <time>{itemDate(item)}</time>
-            </span>
-                    </button>
+                    <div className="item-row-shell" key={item.id}>
+                        <button className={selected?.id === item.id ? 'item-row selected' : 'item-row'} onClick={() => onSelect(item.id)}>
+                            <span className={item.readAt ? 'unread-dot read' : 'unread-dot'}/>
+                            <span className="item-row-copy"><strong>{item.title}</strong><span>{item.sourceName}</span><time>{itemDate(item)}</time></span>
+                        </button>
+                        <div className="item-row-actions" aria-label={`Save actions for ${item.title}`}>
+                            <button className={item.starredAt ? 'active' : ''} title={item.starredAt ? 'Unstar' : 'Star'} aria-label={item.starredAt ? `Unstar ${item.title}` : `Star ${item.title}`}
+                                    onClick={() => void onSetStarred(item.id, !item.starredAt)}><Star size={14} fill={item.starredAt ? 'currentColor' : 'none'}/></button>
+                            <button className={item.readLaterAt ? 'active' : ''} title={item.readLaterAt ? 'Remove from Read Later' : 'Read Later'} aria-label={item.readLaterAt ? `Remove ${item.title} from Read Later` : `Add ${item.title} to Read Later`}
+                                    onClick={() => void onSetReadLater(item.id, !item.readLaterAt)}><Clock3 size={14}/></button>
+                            <button title="Edit tags" aria-label={`Edit tags for ${item.title}`} onClick={() => onEditTags(item.id)}><Tags size={14}/></button>
+                        </div>
+                    </div>
                 ))}
+                {archivedItems.length > 0 && <div className="archived-list-label">Saved from removed sources</div>}
+                {archivedItems.map((article) => <button key={article.id} className="item-row archived-item-row" onClick={() => onOpenArchived(article)}>
+                    <ExternalLink size={14}/><span className="item-row-copy"><strong>{article.articleTitle}</strong><span>{article.sourceName} · Open in web</span></span>
+                </button>)}
             </div>
             <article className="reader-pane">
                 <button className="secondary-button reader-expand-button" onClick={() => setExpanded((current) => !current)}
@@ -356,6 +375,20 @@ export function ReaderView({
                                         onClick={() => onMarkUnread(selected.id)}>
                                     Mark unread
                                 </button>}
+                                <button className={selected.starredAt ? 'secondary-button save-control active' : 'secondary-button save-control'}
+                                        onClick={() => void onSetStarred(selected.id, !selected.starredAt)} title={selected.starredAt ? 'Unstar' : 'Star'}>
+                                    <Star size={16} fill={selected.starredAt ? 'currentColor' : 'none'}/><span>{selected.starredAt ? 'Starred' : 'Star'}</span>
+                                </button>
+                                {readLaterView && selected.readLaterAt ? <button className="secondary-button save-control active"
+                                        onClick={() => void onDoneReadLater(selected.id)} title="Remove and open the next article">
+                                    <CheckCircle2 size={16}/><span>Done</span>
+                                </button> : <button className={selected.readLaterAt ? 'secondary-button save-control active' : 'secondary-button save-control'}
+                                        onClick={() => void onSetReadLater(selected.id, !selected.readLaterAt)} title={selected.readLaterAt ? 'Remove from Read Later' : 'Read Later'}>
+                                    <Clock3 size={16}/><span>{selected.readLaterAt ? 'Read Later' : 'Read Later'}</span>
+                                </button>}
+                                <button className="secondary-button save-control" onClick={() => onEditTags(selected.id)} title="Edit tags">
+                                    <Tags size={16}/><span>Tags</span>
+                                </button>
                                 <button className="secondary-button article-navigation-button"
                                         disabled={!previousItem} onClick={() => previousItem && onSelect(previousItem.id)}
                                         aria-label="Previous article" title="Previous article">
@@ -376,6 +409,9 @@ export function ReaderView({
                                 {selected.author ? `By ${selected.author} · ` : ''}
                                 {itemDate(selected)}
                             </p>
+                            {(selected.tags?.length ?? 0) > 0 && <div className="article-tags" aria-label="Article tags">
+                                {selected.tags!.map((tag) => <button key={tag.id} onClick={() => onEditTags(selected.id)}>{tag.name}</button>)}
+                            </div>}
                         </header>
                         {unresolvedNoteIds.size > 0 && <div className="article-status warning-status" role="status">
                             <div><strong>{unresolvedNoteIds.size} saved {unresolvedNoteIds.size === 1 ? 'highlight' : 'highlights'} could not be located</strong>

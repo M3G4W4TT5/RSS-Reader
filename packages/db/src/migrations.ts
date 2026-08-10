@@ -12,6 +12,7 @@ import * as initialImportLimitMigration from '../../../migrations/0005_initial_i
 import * as articleImagesMigration from '../../../migrations/0006_article_images';
 import * as collectionIconsMigration from '../../../migrations/0007_collection_icons';
 import * as notesMigration from '../../../migrations/0008_notes';
+import * as savedArticlesMigration from '../../../migrations/0009_saved_articles';
 import type { DatabaseSchema } from './database';
 
 class StaticMigrationProvider implements MigrationProvider {
@@ -25,6 +26,7 @@ class StaticMigrationProvider implements MigrationProvider {
       '0006_article_images': articleImagesMigration,
       '0007_collection_icons': collectionIconsMigration,
       '0008_notes': notesMigration,
+      '0009_saved_articles': savedArticlesMigration,
     };
   }
 }

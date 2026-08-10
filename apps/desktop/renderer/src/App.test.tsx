@@ -57,7 +57,7 @@ beforeEach(async () => {
         {id: sourceId, name: 'Example', feedUrl: 'https://example.com/feed.xml', siteUrl: 'https://example.com/', description: null, enabled: true, lastFetchedAt: now, collectionIds: [], createdAt: now, updatedAt: now},
         {id: secondSourceId, name: 'Second', feedUrl: 'https://second.example/feed.xml', siteUrl: null, description: null, enabled: true, lastFetchedAt: null, collectionIds: [], createdAt: now, updatedAt: now},
     ];
-    const summary = {id: itemId, sourceId, sourceName: 'Example', canonicalUrl: 'https://example.com/article', title: 'Article title', author: 'Writer', publishedAt: now, firstSeenAt: now, readAt: null};
+    const summary = {id: itemId, sourceId, sourceName: 'Example', canonicalUrl: 'https://example.com/article', title: 'Article title', author: 'Writer', publishedAt: now, firstSeenAt: now, readAt: null, savedArticleId: null, starredAt: null, readLaterAt: null, tags: []};
     itemListResponse = [summary];
     notesResponse = [];
     setReadCalls = [];
@@ -103,6 +103,14 @@ beforeEach(async () => {
             },
             openExternalLink: async () => ({opened: true}),
         },
+        saved: {
+            setStarred: async () => ({savedArticleId: null, starredAt: null, readLaterAt: null, tags: []}),
+            setReadLater: async () => ({savedArticleId: null, starredAt: null, readLaterAt: null, tags: []}),
+            setTags: async () => ({savedArticleId: null, starredAt: null, readLaterAt: null, tags: []}),
+            listArchived: async () => [],
+            openOriginal: async () => ({opened: true}),
+        },
+        tags: {list: async () => [], create: async () => { throw new Error('Not used'); }, update: async () => { throw new Error('Not used'); }, delete: async () => ({success: true})},
         notes: {
             list: async () => notesResponse,
             listForItem: async (id: string) => notesResponse.filter(({itemId: noteItemId}) => noteItemId === id),

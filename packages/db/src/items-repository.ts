@@ -6,6 +6,7 @@ import type {
 import {sql} from 'kysely';
 import type {Database} from './database';
 import { ArticleContentRepository } from './article-content-repository';
+import {SavedArticlesRepository} from './saved-articles-repository';
 
 function iso(value: Date | string): string {
     return new Date(value).toISOString();
@@ -23,7 +24,9 @@ interface ItemRow {
     read_at: Date | string | null;
 }
 
-function summary(row: ItemRow): ItemSummary {
+function summary(row: ItemRow, saved: Awaited<ReturnType<SavedArticlesRepository['getForItem']>> = {
+    savedArticleId: null, starredAt: null, readLaterAt: null, tags: [],
+}): ItemSummary {
     return {
         id: row.id,
         sourceId: row.source_id,
@@ -34,6 +37,7 @@ function summary(row: ItemRow): ItemSummary {
         publishedAt: row.published_at ? iso(row.published_at) : null,
         firstSeenAt: iso(row.first_seen_at),
         readAt: row.read_at ? iso(row.read_at) : null,
+        ...saved,
     };
 }
 
@@ -45,6 +49,7 @@ export class ItemsRepository {
         let builder = this.database
             .selectFrom('items')
             .innerJoin('sources', 'sources.id', 'items.source_id')
+            .leftJoin('saved_articles', 'saved_articles.item_id', 'items.id')
             .select([
                 'items.id',
                 'items.source_id',
@@ -71,11 +76,18 @@ export class ItemsRepository {
         if (query.unreadOnly) {
             builder = builder.where('items.read_at', 'is', null);
         }
+        if (query.starredOnly) builder = builder.where('saved_articles.starred_at', 'is not', null);
+        if (query.readLaterOnly) builder = builder.where('saved_articles.read_later_at', 'is not', null);
+        if (query.tagId) {
+            builder = builder.where('saved_articles.id', 'in', this.database.selectFrom('saved_article_tags')
+                .select('saved_article_id').where('tag_id', '=', query.tagId));
+        }
         const rows = await builder
-            .orderBy(sql`coalesce(items.published_at, items.first_seen_at)`, 'desc')
+            .orderBy(query.readLaterOnly ? sql`saved_articles.read_later_at` : sql`coalesce(items.published_at, items.first_seen_at)`, 'desc')
             .orderBy('items.id', 'desc')
             .execute();
-        return rows.map(summary);
+        const states = await new SavedArticlesRepository(this.database).getForItems(rows.map((row) => row.id));
+        return rows.map((row) => summary(row, states.get(row.id)));
     }
 
     async get(id: string): Promise<ItemDetail> {
@@ -99,7 +111,7 @@ export class ItemsRepository {
             .executeTakeFirst();
         if (!row) throw new Error('Item not found.');
         return {
-            ...summary(row),
+            ...summary(row, await new SavedArticlesRepository(this.database).getForItem(id)),
             summary: row.summary,
             feedContentHtml: row.feed_content_html,
             articleContent: await new ArticleContentRepository(this.database).get(id),

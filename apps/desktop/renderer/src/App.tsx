@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
     ChevronDown, ChevronLeft, ChevronRight, CircleDot, Folder,
-    Folders, Inbox, NotebookText, RefreshCw, Rss, Settings,
+    Folders, Inbox, NotebookText, RefreshCw, Rss, Settings, Star, Clock3, Tags,
 } from 'lucide-react';
 import type {
     AppCommand,
@@ -15,6 +15,10 @@ import type {
     Source,
     SourceImportResult,
     SourceImportStatus,
+    ArticleTag,
+    SavedArticle,
+    SavedArticleState,
+    ArchivedSavedArticleQuery,
 } from '@rss-reader/contracts';
 import {CollectionDialog} from './CollectionDialog';
 import {ReaderView} from './ReaderView';
@@ -28,15 +32,19 @@ import {Modal} from './Modal';
 import {FetchStatusToast} from './FetchStatusToast';
 import {NotesPage} from './NotesPage';
 import {ErrorToast} from './ErrorToast';
+import {TagDialog} from './TagDialog';
 
 type View =
     | 'all'
     | 'unread'
+    | 'starred'
+    | 'read-later'
     | 'manage-sources'
     | 'manage-collections'
     | 'notes'
     | `source:${string}`
-    | `collection:${string}`;
+    | `collection:${string}`
+    | `tag:${string}`;
 type SourceDialogState = { mode: 'create' } | { mode: 'edit'; source: Source };
 type CollectionDialogState =
     | { mode: 'create' }
@@ -50,11 +58,15 @@ function errorMessage(error: unknown): string {
 }
 
 function isReaderView(view: View): boolean {
-    return view === 'all' || view === 'unread' || view.startsWith('source:') || view.startsWith('collection:');
+    return view === 'all' || view === 'unread' || view === 'starred' || view === 'read-later'
+        || view.startsWith('source:') || view.startsWith('collection:') || view.startsWith('tag:');
 }
 
 function itemQuery(view: View): ItemQuery {
     if (view === 'unread') return {unreadOnly: true};
+    if (view === 'starred') return {unreadOnly: false, starredOnly: true};
+    if (view === 'read-later') return {unreadOnly: false, readLaterOnly: true};
+    if (view.startsWith('tag:')) return {unreadOnly: false, tagId: view.slice('tag:'.length)};
     if (view.startsWith('source:')) {
         return {unreadOnly: false, sourceId: view.slice('source:'.length)};
     }
@@ -67,12 +79,25 @@ function itemQuery(view: View): ItemQuery {
     return {unreadOnly: false};
 }
 
+function archivedQuery(view: View): ArchivedSavedArticleQuery | undefined {
+    if (view === 'starred') return {kind: 'starred'};
+    if (view === 'read-later') return {kind: 'readLater'};
+    if (view.startsWith('tag:')) return {kind: 'tag', tagId: view.slice('tag:'.length)};
+    return undefined;
+}
+
 function sortItemsByDate(items: ItemSummary[]): ItemSummary[] {
     return [...items].sort((left, right) => {
         const leftTime = Date.parse(left.publishedAt ?? left.firstSeenAt);
         const rightTime = Date.parse(right.publishedAt ?? right.firstSeenAt);
         return rightTime - leftTime || right.id.localeCompare(left.id);
     });
+}
+
+function sortItemsForView(items: ItemSummary[], view: View): ItemSummary[] {
+    if (view === 'read-later') return [...items].sort((left, right) =>
+        Date.parse(right.readLaterAt ?? right.firstSeenAt) - Date.parse(left.readLaterAt ?? left.firstSeenAt));
+    return sortItemsByDate(items);
 }
 
 function itemSummary(item: ItemDetail): ItemSummary {
@@ -84,6 +109,7 @@ export function App() {
     const [view, setView] = useState<View>('all');
     const [collectionsExpanded, setCollectionsExpanded] = useState(true);
     const [sourcesExpanded, setSourcesExpanded] = useState(false);
+    const [tagsExpanded, setTagsExpanded] = useState(true);
     const [sources, setSources] = useState<Source[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
     const [allItems, setAllItems] = useState<ItemSummary[]>([]);
@@ -91,6 +117,12 @@ export function App() {
     const [selected, setSelected] = useState<ItemDetail>();
     const [allNotes, setAllNotes] = useState<Note[]>([]);
     const [articleNotes, setArticleNotes] = useState<Note[]>([]);
+    const [tags, setTags] = useState<ArticleTag[]>([]);
+    const [archivedItems, setArchivedItems] = useState<SavedArticle[]>([]);
+    const [archivedStarredCount, setArchivedStarredCount] = useState(0);
+    const [archivedReadLaterCount, setArchivedReadLaterCount] = useState(0);
+    const [tagDialogItemId, setTagDialogItemId] = useState<string>();
+    const [savedBusy, setSavedBusy] = useState(false);
     const [notesLoading, setNotesLoading] = useState(true);
     const [noteBusy, setNoteBusy] = useState(false);
     const [focusedArticleNoteId, setFocusedArticleNoteId] = useState<string>();
@@ -128,6 +160,8 @@ export function App() {
         [collections],
     );
     const unreadCount = allItems.filter((item) => !item.readAt).length;
+    const starredCount = allItems.filter((item) => item.starredAt).length + archivedStarredCount;
+    const readLaterCount = allItems.filter((item) => item.readLaterAt).length + archivedReadLaterCount;
 
     function toggleSidebar(): void {
         setSidebarCollapsed((collapsed) => {
@@ -135,6 +169,7 @@ export function App() {
             if (nextCollapsed) {
                 setCollectionsExpanded(false);
                 setSourcesExpanded(false);
+                setTagsExpanded(false);
             }
             return nextCollapsed;
         });
@@ -175,12 +210,15 @@ export function App() {
     }, [extractArticle]);
 
     const reloadBase = useCallback(async () => {
-        const [nextSources, nextCollections, nextItems, nextSettings, nextNotes] = await Promise.all([
+        const [nextSources, nextCollections, nextItems, nextSettings, nextNotes, nextTags, archivedStarred, archivedReadLater] = await Promise.all([
             window.readerApi.sources.list(),
             window.readerApi.collections.list(),
             window.readerApi.items.list({unreadOnly: false}),
             window.readerApi.settings.get(),
             window.readerApi.notes.list(),
+            window.readerApi.tags.list(),
+            window.readerApi.saved.listArchived({kind: 'starred'}),
+            window.readerApi.saved.listArchived({kind: 'readLater'}),
         ]);
         setSources(nextSources);
         setCollections(nextCollections);
@@ -188,6 +226,9 @@ export function App() {
         setSettings(nextSettings);
         setAllNotes(nextNotes);
         setNotesLoading(false);
+        setTags(nextTags);
+        setArchivedStarredCount(archivedStarred.length);
+        setArchivedReadLaterCount(archivedReadLater.length);
     }, []);
 
     const loadItems = useCallback(async (nextView: View, preferredId?: string) => {
@@ -195,16 +236,23 @@ export function App() {
         loadedView.current = nextView;
         if (!isReaderView(nextView)) {
             retainedUnreadItem.current = undefined;
+            setArchivedItems([]);
             setItemsLoading(false);
             return;
         }
         setItemsLoading(true);
         try {
-            let nextItems = sortItemsByDate(await window.readerApi.items.list(itemQuery(nextView)));
+            const archived = archivedQuery(nextView);
+            const [listedItems, nextArchived] = await Promise.all([
+                window.readerApi.items.list(itemQuery(nextView)),
+                archived ? window.readerApi.saved.listArchived(archived) : Promise.resolve([]),
+            ]);
+            let nextItems = sortItemsForView(listedItems, nextView);
+            setArchivedItems(nextArchived);
             const retained = retainedUnreadItem.current;
             if (nextView === 'unread' && retained && selectedItemId.current === retained.id
                 && !nextItems.some(({id}) => id === retained.id)) {
-                nextItems = sortItemsByDate([...nextItems, retained]);
+                nextItems = sortItemsForView([...nextItems, retained], nextView);
             } else if (nextView !== 'unread') retainedUnreadItem.current = undefined;
             setItems(nextItems);
             const id =
@@ -413,6 +461,113 @@ export function App() {
         }
     }
 
+    function applySavedState(id: string, state: SavedArticleState): void {
+        const update = <T extends ItemSummary>(item: T): T => item.id === id ? {...item, ...state} : item;
+        setSelected((current) => current?.id === id ? {...current, ...state} : current);
+        setItems((current) => current.map(update));
+        setAllItems((current) => current.map(update));
+    }
+
+    async function setStarred(id: string, enabled: boolean): Promise<void> {
+        setSavedBusy(true);
+        try {
+            const state = await window.readerApi.saved.setStarred(id, enabled);
+            applySavedState(id, state);
+            if (view === 'starred' && !enabled) await loadItems(view);
+        } catch (savedError) {
+            setError(errorMessage(savedError));
+            throw savedError;
+        } finally {
+            setSavedBusy(false);
+        }
+    }
+
+    async function setReadLater(id: string, enabled: boolean): Promise<void> {
+        setSavedBusy(true);
+        try {
+            const state = await window.readerApi.saved.setReadLater(id, enabled);
+            applySavedState(id, state);
+            if (view === 'read-later' && !enabled) await loadItems(view);
+        } catch (savedError) {
+            setError(errorMessage(savedError));
+            throw savedError;
+        } finally {
+            setSavedBusy(false);
+        }
+    }
+
+    async function doneReadLater(id: string): Promise<void> {
+        const index = items.findIndex((item) => item.id === id);
+        const preferred = items[index + 1]?.id ?? items[index - 1]?.id;
+        setSavedBusy(true);
+        try {
+            const state = await window.readerApi.saved.setReadLater(id, false);
+            applySavedState(id, state);
+            await loadItems('read-later', preferred);
+        } catch (savedError) {
+            setError(errorMessage(savedError));
+            throw savedError;
+        } finally {
+            setSavedBusy(false);
+        }
+    }
+
+    async function saveArticleTags(itemId: string, tagIds: string[]): Promise<void> {
+        setSavedBusy(true);
+        try {
+            const state = await window.readerApi.saved.setTags(itemId, tagIds);
+            applySavedState(itemId, state);
+            setTagDialogItemId(undefined);
+            setTags(await window.readerApi.tags.list());
+            if (view.startsWith('tag:') && !tagIds.includes(view.slice(4))) await loadItems(view);
+        } catch (savedError) {
+            setError(errorMessage(savedError));
+            throw savedError;
+        } finally {
+            setSavedBusy(false);
+        }
+    }
+
+    async function createTag(name: string): Promise<ArticleTag> {
+        try {
+            const created = await window.readerApi.tags.create(name);
+            setTags((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)));
+            return created;
+        } catch (tagError) {
+            setError(errorMessage(tagError));
+            throw tagError;
+        }
+    }
+
+    async function renameTag(id: string, name: string): Promise<void> {
+        try {
+            const updated = await window.readerApi.tags.update(id, name);
+            setTags((current) => current.map((tag) => tag.id === id ? updated : tag).sort((a, b) => a.name.localeCompare(b.name)));
+            const rename = <T extends ItemSummary>(item: T): T => ({...item, tags: item.tags.map((tag) => tag.id === id ? {...tag, name: updated.name} : tag)});
+            setItems((current) => current.map(rename));
+            setAllItems((current) => current.map(rename));
+            setSelected((current) => current ? rename(current) : current);
+        } catch (tagError) {
+            setError(errorMessage(tagError));
+            throw tagError;
+        }
+    }
+
+    async function deleteTag(id: string): Promise<void> {
+        try {
+            await window.readerApi.tags.delete(id);
+            setTags((current) => current.filter((tag) => tag.id !== id));
+            const remove = <T extends ItemSummary>(item: T): T => ({...item, tags: item.tags.filter((tag) => tag.id !== id)});
+            setItems((current) => current.map(remove));
+            setAllItems((current) => current.map(remove));
+            setSelected((current) => current ? remove(current) : current);
+            if (view === `tag:${id}`) setView('all');
+        } catch (tagError) {
+            setError(errorMessage(tagError));
+            throw tagError;
+        }
+    }
+
     async function createNote(request: Parameters<typeof window.readerApi.notes.create>[0]): Promise<void> {
         setNoteBusy(true);
         try {
@@ -542,23 +697,44 @@ export function App() {
             void window.readerApi.items.openOriginal(selected.id).catch((openError: unknown) => setError(errorMessage(openError)));
             return;
         }
+        if (command === 'toggle-starred') {
+            void setStarred(selected.id, !selected.starredAt);
+            return;
+        }
+        if (command === 'toggle-read-later') {
+            void setReadLater(selected.id, !selected.readLaterAt);
+            return;
+        }
+        if (command === 'edit-tags') {
+            setTagDialogItemId(selected.id);
+            return;
+        }
         const selectedIndex = items.findIndex((item) => item.id === selected.id);
         const offset = command === 'next-item' ? 1 : command === 'previous-item' ? -1 : 0;
         const nextItem = items[selectedIndex + offset];
         if (nextItem) void selectItem(nextItem.id);
     }), [fetching, importing, items, selected, sources]);
 
+    const tagDialogItem = tagDialogItemId
+        ? (selected?.id === tagDialogItemId ? selected : allItems.find((item) => item.id === tagDialogItemId))
+        : undefined;
     const title =
         view === 'all'
             ? 'All Items'
             : view === 'unread'
                 ? 'Unread'
+                : view === 'starred'
+                    ? 'Starred'
+                    : view === 'read-later'
+                        ? 'Read Later'
                 : view === 'manage-sources'
                     ? 'Sources'
                     : view === 'manage-collections'
                         ? 'Collections'
                         : view === 'notes'
                             ? 'Notes'
+                        : view.startsWith('tag:')
+                            ? tags.find((tag) => tag.id === view.slice(4))?.name ?? 'Tag'
                         : view.startsWith('source:')
                             ? sources.find((source) => source.id === view.slice(7))?.name ?? 'Source'
                             : collections.find((collection) => collection.id === view.slice(11))?.name ??
@@ -584,6 +760,25 @@ export function App() {
                             onClick={() => setView('unread')} title="Unread">
                         <span className="nav-entry"><CircleDot size={18}/><span className="nav-text">Unread</span></span><span className="count">{unreadCount}</span>
                     </button>
+                    <button className={view === 'starred' ? 'nav-item active' : 'nav-item'} onClick={() => setView('starred')} title="Starred">
+                        <span className="nav-entry"><Star size={18}/><span className="nav-text">Starred</span></span><span className="count">{starredCount}</span>
+                    </button>
+                    <button className={view === 'read-later' ? 'nav-item active' : 'nav-item'} onClick={() => setView('read-later')} title="Read Later">
+                        <span className="nav-entry"><Clock3 size={18}/><span className="nav-text">Read Later</span></span><span className="count">{readLaterCount}</span>
+                    </button>
+                    {tags.length > 0 && <>
+                        <div className="nav-section-header section-label">
+                            <span className="nav-section-link"><span className="nav-entry"><Tags size={18}/><span className="nav-text">Tags</span></span><span className="count">{tags.length}</span></span>
+                            <button className="nav-disclosure" aria-label="Toggle tags" aria-expanded={tagsExpanded} aria-disabled={sidebarCollapsed}
+                                    onClick={() => !sidebarCollapsed && setTagsExpanded((expanded) => !expanded)}>
+                                {tagsExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                            </button>
+                        </div>
+                        {tagsExpanded && tags.map((tag) => <button key={tag.id} className={view === `tag:${tag.id}` ? 'nav-item active' : 'nav-item'}
+                                title={tag.name} onClick={() => setView(`tag:${tag.id}`)}>
+                            <span className="nav-entry"><Tags size={15}/><span className="nav-text">{tag.name}</span></span><span className="count">{tag.articleCount}</span>
+                        </button>)}
+                    </>}
                     <div className="nav-section-header section-label">
                         <button className={view === 'manage-collections' ? 'nav-section-link active' : 'nav-section-link'}
                                 onClick={() => setView('manage-collections')} title="Manage collections">
@@ -651,7 +846,7 @@ export function App() {
                     <div>
                         <p className="eyebrow">{isReaderView(view) ? 'Your library' : 'Library setup'}</p>
                         <h1>{title}</h1>
-                        <p>{isReaderView(view) ? 'Read imported feed content and keep track of what you have seen.' : view === 'notes' ? 'Review highlights and annotations organised by collection and article.' : view === 'manage-sources' ? 'Add, organise, and manually refresh website or feed subscriptions.' : 'Group a source into as many collections as you need.'}</p>
+                        <p>{view === 'starred' ? 'Articles you want to keep and return to.' : view === 'read-later' ? 'Your reading queue, ordered by when each article was added.' : view.startsWith('tag:') ? 'Articles organised with this personal tag.' : isReaderView(view) ? 'Read imported feed content and keep track of what you have seen.' : view === 'notes' ? 'Review highlights and annotations organised by collection and article.' : view === 'manage-sources' ? 'Add, organise, and manually refresh website or feed subscriptions.' : 'Group a source into as many collections as you need.'}</p>
                     </div>
                     <div className="header-actions">
                         {view === 'manage-sources' && (sourceSelectionMode ? <>
@@ -710,16 +905,20 @@ export function App() {
                 {loading ? (
                     <div className="empty-state">Loading your local library…</div>
                 ) : isReaderView(view) ? (
-                    <ReaderView items={items} selected={selected} loading={itemsLoading}
+                     <ReaderView items={items} selected={selected} loading={itemsLoading}
                                 extracting={extractingItemId === selected?.id}
-                                notes={articleNotes} noteBusy={noteBusy} focusNoteId={focusedArticleNoteId}
+                                 notes={articleNotes} noteBusy={noteBusy} focusNoteId={focusedArticleNoteId}
+                                 archivedItems={archivedItems} readLaterView={view === 'read-later'}
                                 onSelect={(id) => void selectItem(id)} onMarkUnread={(id) => void markUnread(id)}
                                 onRetryExtraction={(id) => selected?.id === id && void extractArticle(selected, true)}
                                 onOpenExternalLink={(itemId, url) => void window.readerApi.items.openExternalLink(itemId, url).catch((openError: unknown) => setError(errorMessage(openError)))}
                                 onOpenOriginal={(id) => void window.readerApi.items.openOriginal(id).catch((openError: unknown) => setError(errorMessage(openError)))}
-                                onCreateNote={createNote} onUpdateNote={updateNote} onDeleteNote={deleteNote}
-                                onOpenNotes={(noteId) => {setFocusedNotesPageId(noteId); setView('notes');}}
-                                onFocusNoteHandled={clearFocusedArticleNote}/>
+                                 onCreateNote={createNote} onUpdateNote={updateNote} onDeleteNote={deleteNote}
+                                 onOpenNotes={(noteId) => {setFocusedNotesPageId(noteId); setView('notes');}}
+                                 onSetStarred={setStarred} onSetReadLater={setReadLater} onDoneReadLater={doneReadLater}
+                                 onEditTags={setTagDialogItemId}
+                                 onOpenArchived={(article) => void window.readerApi.saved.openOriginal(article.id).catch((openError: unknown) => setError(errorMessage(openError)))}
+                                 onFocusNoteHandled={clearFocusedArticleNote}/>
                 ) : view === 'notes' ? <NotesPage notes={allNotes} loading={notesLoading} busy={noteBusy}
                     focusNoteId={focusedNotesPageId} onFocusHandled={clearFocusedNotesPage}
                     onOpenArticle={(note) => void openNoteArticle(note)}
@@ -850,10 +1049,16 @@ export function App() {
                 settings={settings} busy={saving}
                 onCancel={() => setSettingsDialogOpen(false)} onSave={saveSettings}/>
             }
+            {tagDialogItem && <TagDialog key={tagDialogItem.id} articleTitle={tagDialogItem.title}
+                tags={tags} selectedIds={tagDialogItem.tags.map(({id}) => id)} busy={savedBusy}
+                onCreate={createTag} onRename={renameTag} onDelete={deleteTag}
+                onSave={(tagIds) => saveArticleTags(tagDialogItem.id, tagIds)}
+                onCancel={() => setTagDialogItemId(undefined)}/>
+            }
             {destructiveConfirmation && <Modal
                 title={destructiveConfirmation.kind === 'source' ? 'Delete source?' : 'Delete collection?'}
                 description={destructiveConfirmation.kind === 'source'
-                    ? `“${destructiveConfirmation.source.name}” and all of its items, cached content, images, memberships, and fetch history will be permanently deleted. Saved notes will be retained with their article and source details.`
+                    ? `“${destructiveConfirmation.source.name}” and all of its items, cached content, images, memberships, and fetch history will be permanently deleted. Notes, starred articles, Read Later entries, and tags will retain article snapshots and original links.`
                     : `“${destructiveConfirmation.collection.name}” will be permanently deleted. Its sources and items will be kept.`}
                 onCancel={() => setDestructiveConfirmation(undefined)}>
                 <div className="confirmation-prompt" role="alertdialog" aria-label="Confirm deletion">

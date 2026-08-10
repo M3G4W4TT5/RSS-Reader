@@ -31,6 +31,15 @@ export const ipcChannels = {
     notesUpdate: 'notes:update',
     notesDelete: 'notes:delete',
     notesOpenOriginal: 'notes:open-original',
+    savedSetStarred: 'saved:set-starred',
+    savedSetReadLater: 'saved:set-read-later',
+    savedSetTags: 'saved:set-tags',
+    savedListArchived: 'saved:list-archived',
+    savedOpenOriginal: 'saved:open-original',
+    tagsList: 'tags:list',
+    tagsCreate: 'tags:create',
+    tagsUpdate: 'tags:update',
+    tagsDelete: 'tags:delete',
     appCommand: 'app:command',
     settingsGet: 'settings:get',
     settingsUpdate: 'settings:update',
@@ -263,8 +272,27 @@ export const itemQuerySchema = z.object({
     unreadOnly: z.boolean().default(false),
     sourceId: idSchema.optional(),
     collectionId: idSchema.optional(),
+    starredOnly: z.boolean().optional(),
+    readLaterOnly: z.boolean().optional(),
+    tagId: idSchema.optional(),
 });
 export type ItemQuery = z.infer<typeof itemQuerySchema>;
+
+export const articleTagSchema = z.object({
+    id: idSchema,
+    name: z.string().trim().min(1).max(50),
+    articleCount: z.number().int().nonnegative(),
+});
+export type ArticleTag = z.infer<typeof articleTagSchema>;
+export const articleTagListSchema = z.array(articleTagSchema);
+
+export const savedArticleStateSchema = z.object({
+    savedArticleId: idSchema.nullable(),
+    starredAt: dateTimeSchema.nullable(),
+    readLaterAt: dateTimeSchema.nullable(),
+    tags: articleTagListSchema,
+});
+export type SavedArticleState = z.infer<typeof savedArticleStateSchema>;
 
 export const itemSummarySchema = z.object({
     id: idSchema,
@@ -276,6 +304,10 @@ export const itemSummarySchema = z.object({
     publishedAt: dateTimeSchema.nullable(),
     firstSeenAt: dateTimeSchema,
     readAt: dateTimeSchema.nullable(),
+    savedArticleId: idSchema.nullable(),
+    starredAt: dateTimeSchema.nullable(),
+    readLaterAt: dateTimeSchema.nullable(),
+    tags: articleTagListSchema,
 });
 export type ItemSummary = z.infer<typeof itemSummarySchema>;
 export const itemListSchema = z.array(itemSummarySchema);
@@ -328,6 +360,9 @@ export const appCommandSchema = z.enum([
     'previous-item',
     'mark-unread',
     'open-original',
+    'toggle-starred',
+    'toggle-read-later',
+    'edit-tags',
 ]);
 export type AppCommand = z.infer<typeof appCommandSchema>;
 
@@ -336,6 +371,31 @@ export const setItemReadRequestSchema = z.object({
     read: z.boolean(),
 });
 export type SetItemReadRequest = z.infer<typeof setItemReadRequestSchema>;
+
+export const setSavedFlagRequestSchema = z.object({id: idSchema, enabled: z.boolean()});
+export const setArticleTagsRequestSchema = z.object({itemId: idSchema, tagIds: z.array(idSchema).max(100).transform((ids) => [...new Set(ids)])});
+export const tagNameSchema = z.string().normalize('NFKC').trim().min(1).max(50);
+export const createTagRequestSchema = z.object({name: tagNameSchema});
+export const updateTagRequestSchema = z.object({id: idSchema, name: tagNameSchema});
+export const archivedSavedArticleQuerySchema = z.discriminatedUnion('kind', [
+    z.object({kind: z.literal('starred')}),
+    z.object({kind: z.literal('readLater')}),
+    z.object({kind: z.literal('tag'), tagId: idSchema}),
+]);
+export type ArchivedSavedArticleQuery = z.infer<typeof archivedSavedArticleQuerySchema>;
+export const savedArticleSchema = z.object({
+    id: idSchema,
+    itemId: idSchema.nullable(),
+    articleTitle: z.string().min(1),
+    sourceName: z.string().min(1),
+    canonicalUrl: z.url().nullable(),
+    collectionNames: z.array(z.string().min(1)),
+    starredAt: dateTimeSchema.nullable(),
+    readLaterAt: dateTimeSchema.nullable(),
+    tags: articleTagListSchema,
+});
+export type SavedArticle = z.infer<typeof savedArticleSchema>;
+export const savedArticleListSchema = z.array(savedArticleSchema);
 
 export const openOriginalResultSchema = z.object({opened: z.literal(true)});
 export type OpenOriginalResult = z.infer<typeof openOriginalResultSchema>;
@@ -417,6 +477,19 @@ export interface ReaderApi {
         openOriginal(id: string): Promise<OpenOriginalResult>;
         extractArticle(id: string, retry?: boolean): Promise<ArticleExtractionResult>;
         openExternalLink(itemId: string, url: string): Promise<OpenOriginalResult>;
+    };
+    saved: {
+        setStarred(id: string, enabled: boolean): Promise<SavedArticleState>;
+        setReadLater(id: string, enabled: boolean): Promise<SavedArticleState>;
+        setTags(itemId: string, tagIds: string[]): Promise<SavedArticleState>;
+        listArchived(query: ArchivedSavedArticleQuery): Promise<SavedArticle[]>;
+        openOriginal(id: string): Promise<OpenOriginalResult>;
+    };
+    tags: {
+        list(): Promise<ArticleTag[]>;
+        create(name: string): Promise<ArticleTag>;
+        update(id: string, name: string): Promise<ArticleTag>;
+        delete(id: string): Promise<MutationResult>;
     };
     notes: {
         list(): Promise<Note[]>;

@@ -46,6 +46,16 @@ import {
     applicationSettingsSchema,
     updateApplicationSettingsSchema,
     type UpdateApplicationSettings,
+    savedArticleStateSchema,
+    savedArticleListSchema,
+    archivedSavedArticleQuerySchema,
+    type ArchivedSavedArticleQuery,
+    setSavedFlagRequestSchema,
+    setArticleTagsRequestSchema,
+    articleTagSchema,
+    articleTagListSchema,
+    createTagRequestSchema,
+    updateTagRequestSchema,
 } from '@rss-reader/contracts';
 
 const readerApi: ReaderApi = Object.freeze({
@@ -194,6 +204,35 @@ const readerApi: ReaderApi = Object.freeze({
                     openExternalLinkRequestSchema.parse({itemId, url}),
                 ),
             ),
+    }),
+    saved: Object.freeze({
+        setStarred: async (id: string, enabled: boolean) => savedArticleStateSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.savedSetStarred, setSavedFlagRequestSchema.parse({id, enabled})),
+        ),
+        setReadLater: async (id: string, enabled: boolean) => savedArticleStateSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.savedSetReadLater, setSavedFlagRequestSchema.parse({id, enabled})),
+        ),
+        setTags: async (itemId: string, tagIds: string[]) => savedArticleStateSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.savedSetTags, setArticleTagsRequestSchema.parse({itemId, tagIds})),
+        ),
+        listArchived: async (query: ArchivedSavedArticleQuery) => savedArticleListSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.savedListArchived, archivedSavedArticleQuerySchema.parse(query)),
+        ),
+        openOriginal: async (id: string) => openOriginalResultSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.savedOpenOriginal, sourceIdSchema.parse(id)),
+        ),
+    }),
+    tags: Object.freeze({
+        list: async () => articleTagListSchema.parse(await ipcRenderer.invoke(ipcChannels.tagsList)),
+        create: async (name: string) => articleTagSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.tagsCreate, createTagRequestSchema.parse({name})),
+        ),
+        update: async (id: string, name: string) => articleTagSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.tagsUpdate, updateTagRequestSchema.parse({id, name})),
+        ),
+        delete: async (id: string) => mutationResultSchema.parse(
+            await ipcRenderer.invoke(ipcChannels.tagsDelete, deleteRequestSchema.parse({id})),
+        ),
     }),
     notes: Object.freeze({
         list: async () => noteListSchema.parse(

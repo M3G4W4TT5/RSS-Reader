@@ -41,6 +41,8 @@ Later fetches reuse stored ETag and Last-Modified validators. A 304 response is 
 
 Opening an article marks it read automatically. In the Unread view, the newly opened article remains visible until another article or view is opened, preventing the active reader from disappearing; a read article offers **Mark unread**, while unread articles have no manual Mark read control. Previous and next follow the current visible list and disable at its boundaries. Click the article title to open the original page in the system browser; its tooltip reads `Open in web`.
 
+Starred, Read Later, and article tags are independent saved states. Use the reader-header controls or the quick actions on an article row to star an article, add it to the Read Later queue, or assign personal tags. Read Later is ordered by the time articles entered the queue; opening an article does not remove it, while **Done** removes it and advances to the next queued article. Tags are case-insensitively unique and can be created, renamed, deleted, and selected from the sidebar. Saved article snapshots and original links survive source deletion; entries from removed sources appear as web-only records. Read Later protects any existing cached reader content from future retention cleanup, but does not eagerly download an article or promise offline availability.
+
 Select article text to open the Lucide Highlight / Annotate menu. Highlights use the saved-note colour, annotations add an editable plain-text note, and overlapping passages are rejected. Hover over a saved passage for 200 ms, or focus/click it immediately, to view its annotation and edit, delete, or locate it in Notes. Outside clicks close clean pop-ups; unsaved annotation drafts remain open, shake, display `Not saved!`, and lock article selection and application navigation until the draft is saved or explicitly discarded with the popup X (or Cancel for a new annotation). The sidebar Notes entry appears below Sources; its page organises saved passages by collection and article, supports search/filter/sort/edit/delete, and links back to the highlighted passage. Notes survive source deletion using article, source, URL, and collection snapshots.
 
 Source updates report progress in a compact bottom-right status pop-up. Expand its disclosure arrow for per-source results, dismiss it at any time, or leave it to fade automatically five seconds after the update completes.
@@ -54,6 +56,9 @@ Useful Windows menu shortcuts:
 - `Ctrl+R`: update all enabled sources;
 - `Ctrl+Up` / `Ctrl+Down`: previous / next item;
 - `Ctrl+Shift+U`: mark the selected read item unread;
+- `Ctrl+D`: toggle Starred for the selected item;
+- `Ctrl+Shift+D`: toggle Read Later for the selected item;
+- `Ctrl+Alt+T`: edit tags for the selected item;
 - `Ctrl+O`: open the original page in the default browser.
 
 ## Normal development
@@ -105,6 +110,6 @@ pnpm dev
 - `apps/desktop/main/favicon-protocol.ts` exposes source favicons through a restricted trusted protocol with RSS-icon fallback in the renderer.
 - `packages/db/src/items-repository.ts` owns item filtering, details, and read state.
 - `packages/db/src/article-content-repository.ts` owns cached full-article content and extraction state.
-- `migrations` contains immutable ordered migrations, including persisted curated collection icons in `0007_collection_icons` and deletion-safe highlights/annotations in `0008_notes`.
+- `migrations` contains immutable ordered migrations, including persisted curated collection icons in `0007_collection_icons`, deletion-safe highlights/annotations in `0008_notes`, and deletion-safe starred/read-later/tag state in `0009_saved_articles`.
 
 There is no local HTTP application server.

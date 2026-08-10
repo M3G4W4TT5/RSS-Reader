@@ -100,6 +100,14 @@ button:disabled { cursor: wait; opacity: .6; }
 .reader-expanded .item-list { display: none; }
 .item-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid var(--border); background: var(--sidebar); }
 .item-row { display: grid; width: 100%; grid-template-columns: 8px minmax(0, 1fr); gap: 10px; padding: 17px 16px; border-bottom: 1px solid var(--border); color: var(--text); background: transparent; text-align: left; }
+.item-row-shell { position: relative; border-bottom: 1px solid var(--border); }
+.item-row-shell .item-row { padding-right: 92px; border-bottom: 0; }
+.item-row-actions { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.item-row-shell:hover .item-row-actions, .item-row-shell:focus-within .item-row-actions { opacity: 1; }
+.item-row-actions button { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 6px; color: var(--muted); background: var(--background); }
+.item-row-actions button:hover, .item-row-actions button.active { color: var(--highlight); background: var(--highlight-surface); }
+.archived-list-label { padding: 14px 16px 8px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.archived-item-row { grid-template-columns: 18px minmax(0, 1fr); align-items: start; opacity: .8; }
 .item-row:hover { background: var(--sidebar); }
 .item-row.selected { background: var(--sidebar); box-shadow: none; }
 .unread-dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--sidebar); }
@@ -114,6 +122,9 @@ button:disabled { cursor: wait; opacity: .6; }
 .article-header { padding-bottom: 25px; border-bottom: 1px solid var(--border); }
 .article-header h2 { max-width: 780px; margin: 0; color: var(--text); font-family: Georgia, "Times New Roman", serif; font-size: clamp(30px, 3.2vw, 46px); font-weight: 500; line-height: 1.08; letter-spacing: -.03em; }
 .article-reader-controls { display: flex; align-items: center; gap: 8px; margin: 0 48px 21px 0; }
+.save-control.active { color: var(--highlight); background: var(--highlight-surface); }
+.article-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
+.article-tags button { padding: 5px 9px; border-radius: 999px; color: var(--text); background: var(--highlight-surface); font-size: 10px; }
 .article-navigation-button { width: 36px; height: 36px; padding: 0; }
 .article-navigation-button:disabled { cursor: not-allowed; opacity: .35; }
 .article-title-link { position: relative; display: inline; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; line-height: inherit; letter-spacing: inherit; text-align: left; white-space: normal; }
@@ -303,6 +314,18 @@ button:disabled { cursor: wait; opacity: .6; }
 .switch-row span { color: var(--text); font-size: 11px; }
 .switch-row input { width: 18px; height: 18px; accent-color: var(--text); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 25px; padding-top: 19px; border-top: 1px solid var(--border); }
+.tag-dialog { width: min(590px, 100%); }
+.tag-search-row { display: flex; gap: 8px; }
+.tag-search-row input, .tag-rename-input { min-width: 0; flex: 1; padding: 10px 11px; border: 1px solid var(--border); border-radius: 8px; outline: none; color: var(--text); background: var(--background); }
+.tag-search-row input:focus, .tag-rename-input:focus { border-color: var(--highlight); }
+.tag-option-list { display: grid; max-height: 340px; gap: 4px; margin-top: 14px; overflow-y: auto; }
+.tag-option { display: flex; align-items: center; gap: 5px; padding: 4px; border-radius: 8px; }
+.tag-option:hover { background: var(--highlight-surface); }
+.tag-select { display: grid; min-width: 0; flex: 1; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 7px; background: transparent; text-align: left; }
+.tag-select small { color: var(--muted); }
+.tag-check { display: grid; width: 18px; height: 18px; place-items: center; border: 1px solid var(--border); border-radius: 5px; }
+.tag-select.selected .tag-check { color: var(--background); border-color: var(--highlight); background: var(--highlight); }
+.tag-empty { margin: 12px; color: var(--muted); font-size: 12px; text-align: center; }
 .confirmation-prompt > p { margin: 0; color: var(--muted); font-size: 13px; }
 .danger-button { border-color: var(--highlight); }
 

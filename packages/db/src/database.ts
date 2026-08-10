@@ -139,6 +139,33 @@ export interface NotesTable {
   updated_at: TimestampColumn;
 }
 
+export interface SavedArticlesTable {
+  id: Generated<string>;
+  item_id: string | null;
+  article_title_snapshot: string;
+  source_name_snapshot: string;
+  canonical_url_snapshot: string | null;
+  collection_names_snapshot: unknown;
+  starred_at: TimestampColumn | null;
+  read_later_at: TimestampColumn | null;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface TagsTable {
+  id: Generated<string>;
+  name: string;
+  normalized_name: string;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface SavedArticleTagsTable {
+  saved_article_id: string;
+  tag_id: string;
+  created_at: TimestampColumn;
+}
+
 export interface DatabaseSchema {
   app_metadata: AppMetadataTable;
   sources: SourcesTable;
@@ -151,6 +178,9 @@ export interface DatabaseSchema {
   initial_item_suppressions: InitialItemSuppressionsTable;
   article_images: ArticleImagesTable;
   notes: NotesTable;
+  saved_articles: SavedArticlesTable;
+  tags: TagsTable;
+  saved_article_tags: SavedArticleTagsTable;
 }
 
 export type Database = Kysely<DatabaseSchema>;

@@ -60,7 +60,10 @@ An item is protected from content eviction when any of these is true:
 1. it is unread (`read_at is null`) and unread retention is enabled;
 2. extraction is currently `fetching`;
 3. the article was opened or re-extracted within a short safety window, proposed as 24 hours;
-4. a future explicit offline/pinned flag is set (not part of the first implementation).
+4. it is currently in Read Later (`saved_articles.read_later_at is not null`);
+5. a future explicit offline/pinned flag is set (not part of the first implementation).
+
+Read Later protection is implemented as a repository predicate alongside the saved-article feature. It protects already-cached readable content when cleanup is implemented; adding an article to Read Later does not itself fetch or extract the article. Starred and tagged states preserve metadata and original links but do not protect cache bodies.
 
 Otherwise, a read article becomes age-eligible when `read_at` is older than the configured read-retention period. Cleanup should:
 
