@@ -39,6 +39,8 @@ url,name,collection
 
 Later fetches reuse stored ETag and Last-Modified validators. A 304 response is recorded as a successful unchanged run. Items, read state, fetch history, and cached reader content are stored in PostgreSQL. Opening an item lazily fetches its linked page, extracts the main article with Mozilla Readability, sanitizes it, and falls back to feed content if extraction fails. Reopening the item uses the cached result unless Retry is selected.
 
+The article reader places its read/unread and previous/next controls above the source and title. Previous and next follow the current visible list and disable at its boundaries. Click the article title to open the original page in the system browser; its tooltip reads `Open in web`.
+
 Source updates report progress in a compact bottom-right status pop-up. Expand its disclosure arrow for per-source results, dismiss it at any time, or leave it to fade automatically five seconds after the update completes.
 
 Useful Windows menu shortcuts:

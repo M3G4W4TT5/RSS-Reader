@@ -112,9 +112,15 @@ button:disabled { cursor: wait; opacity: .6; }
 .reader-expanded .article-header, .reader-expanded .article-status, .reader-expanded .article-content, .reader-expanded .article-empty { width: min(820px, 100%); margin-right: auto; margin-left: auto; }
 .article-header { padding-bottom: 25px; border-bottom: 1px solid var(--border); }
 .article-header h2 { max-width: 780px; margin: 0; color: var(--text); font-family: Georgia, "Times New Roman", serif; font-size: clamp(30px, 3.2vw, 46px); font-weight: 500; line-height: 1.08; letter-spacing: -.03em; }
+.article-reader-controls { display: flex; align-items: center; gap: 8px; margin: 0 48px 21px 0; }
+.article-navigation-button { width: 36px; height: 36px; padding: 0; }
+.article-navigation-button:disabled { cursor: not-allowed; opacity: .35; }
+.article-title-link { position: relative; display: inline; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; line-height: inherit; letter-spacing: inherit; text-align: left; white-space: normal; }
+.article-title-link:not(:disabled):hover { color: var(--highlight); }
+.article-title-link:disabled { cursor: default; opacity: 1; }
+.article-title-link::after { position: absolute; z-index: 3; top: calc(100% + 9px); left: 0; width: max-content; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--sidebar); content: attr(data-tooltip); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 10px; font-weight: 650; letter-spacing: normal; line-height: 1; opacity: 0; pointer-events: none; transform: translateY(-3px); transition: opacity 120ms ease, transform 120ms ease; }
+.article-title-link:not(:disabled):hover::after, .article-title-link:not(:disabled):focus-visible::after { opacity: 1; transform: translateY(0); }
 .article-meta { margin: 14px 0 0; color: var(--text); font-size: 12px; }
-.article-actions { display: flex; gap: 9px; margin-top: 21px; }
-.icon-action svg { flex: 0 0 auto; }
 .article-status { display: flex; max-width: 720px; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; padding: 11px 13px; border-radius: 8px; font-size: 11px; }
 .article-status div { display: grid; gap: 2px; }
 .article-status strong { font-size: 12px; }

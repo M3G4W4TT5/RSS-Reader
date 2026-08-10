@@ -1,5 +1,5 @@
 import {useMemo, useState, type MouseEvent} from 'react';
-import {Maximize2, Minimize2} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Maximize2, Minimize2} from 'lucide-react';
 import type {ItemDetail, ItemSummary} from '@rss-reader/contracts';
 import {sanitizeFeedContent} from './sanitize-feed-content';
 import {readerGridClassName, readerModeLabel} from './reader-mode';
@@ -41,6 +41,9 @@ export function ReaderView({
         const content = selected?.articleContent.readerHtml ?? selected?.feedContentHtml ?? selected?.summary;
         return content && selected ? sanitizeFeedContent(content, selected.id) : '';
     }, [selected]);
+    const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
+    const previousItem = selectedIndex > 0 ? items[selectedIndex - 1] : undefined;
+    const nextItem = selectedIndex >= 0 ? items[selectedIndex + 1] : undefined;
 
     function openArticleLink(event: MouseEvent<HTMLDivElement>): void {
         const target = event.target;
@@ -91,27 +94,31 @@ export function ReaderView({
                 {selected ? (
                     <>
                         <header className="article-header">
+                            <div className="article-reader-controls" aria-label="Article controls">
+                                <button className="secondary-button article-read-button"
+                                        onClick={() => onSetRead(selected.id, !selected.readAt)}>
+                                    Mark {selected.readAt ? 'unread' : 'read'}
+                                </button>
+                                <button className="secondary-button article-navigation-button"
+                                        disabled={!previousItem} onClick={() => previousItem && onSelect(previousItem.id)}
+                                        aria-label="Previous article" title="Previous article">
+                                    <ChevronLeft size={17} aria-hidden="true"/>
+                                </button>
+                                <button className="secondary-button article-navigation-button"
+                                        disabled={!nextItem} onClick={() => nextItem && onSelect(nextItem.id)}
+                                        aria-label="Next article" title="Next article">
+                                    <ChevronRight size={17} aria-hidden="true"/>
+                                </button>
+                            </div>
                             <p className="eyebrow">{selected.sourceName}</p>
-                            <h2>{selected.title}</h2>
+                            <h2><button className="article-title-link" disabled={!selected.canonicalUrl}
+                                        onClick={() => onOpenOriginal(selected.id)}
+                                        aria-label={`${selected.title} — Open in web`}
+                                        title="Open in web" data-tooltip="Open in web">{selected.title}</button></h2>
                             <p className="article-meta">
                                 {selected.author ? `By ${selected.author} · ` : ''}
                                 {itemDate(selected)}
                             </p>
-                            <div className="article-actions">
-                                <button
-                                    className="secondary-button"
-                                    onClick={() => onSetRead(selected.id, !selected.readAt)}
-                                >
-                                    Mark {selected.readAt ? 'unread' : 'read'}
-                                </button>
-                                <button
-                                    className="primary-button"
-                                    disabled={!selected.canonicalUrl}
-                                    onClick={() => onOpenOriginal(selected.id)}
-                                >
-                                    Open original
-                                </button>
-                            </div>
                         </header>
                         {(extracting || selected.articleContent.status === 'fetching') && (
                             <div className="article-status loading-status" aria-live="polite">
